@@ -211,6 +211,8 @@ struct LiveActivityWidgetConfiguration: BaseView {
             return AnyView(updatedLabelPreview)
         case .totalDailyDose:
             return AnyView(totalDailyDosePreview)
+        case .totalDailyDoseCalendarDay:
+            return AnyView(totalDailyDoseCalendarDayPreview)
         }
     }
 
@@ -319,6 +321,17 @@ struct LiveActivityWidgetConfiguration: BaseView {
         }
     }
 
+    private var totalDailyDoseCalendarDayPreview: some View {
+        VStack {
+            Text("21.5 U")
+                .fontWeight(.bold)
+                .font(.caption)
+                .foregroundStyle(.primary)
+
+            Text("TDD (today)").font(.caption2).foregroundStyle(.primary)
+        }
+    }
+
     private func loadOrder() {
         if let savedItems = UserDefaults.standard.loadLiveActivityOrder() {
             selectedItems = savedItems.count == 4 ? savedItems : savedItems + Array(repeating: nil, count: 4 - savedItems.count)
@@ -373,6 +386,7 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
     case cob
     case updatedLabel
     case totalDailyDose
+    case totalDailyDoseCalendarDay
 
     var id: String { rawValue }
 
@@ -394,6 +408,8 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
             return "Last Updated"
         case .totalDailyDose:
             return "Total Daily Dose"
+        case .totalDailyDoseCalendarDay:
+            return "Total Daily Dose (Calendar Day)"
         }
     }
 }

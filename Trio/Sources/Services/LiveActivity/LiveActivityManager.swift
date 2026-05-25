@@ -296,6 +296,7 @@ final class LiveActivityData: ObservableObject {
                                 cob: 0,
                                 iob: 0,
                                 tdd: 0,
+                                tddCalendarDay: 0,
                                 isOverrideActive: false,
                                 overrideName: "",
                                 overrideDate: Date.now,

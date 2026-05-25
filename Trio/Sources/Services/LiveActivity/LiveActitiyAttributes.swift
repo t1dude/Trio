@@ -9,6 +9,7 @@ struct LiveActivityAttributes: ActivityAttributes {
         case cob
         case updatedLabel
         case totalDailyDose
+        case totalDailyDoseCalendarDay
         case empty
 
         static let defaultItems: [Self] = [.currentGlucoseLarge, .iob, .cob, .updatedLabel]
@@ -38,6 +39,7 @@ struct LiveActivityAttributes: ActivityAttributes {
         let cob: Decimal
         let iob: Decimal
         let tdd: Decimal
+        let tddCalendarDay: Decimal
         let isOverrideActive: Bool
         let overrideName: String
         let overrideDate: Date
