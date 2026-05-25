@@ -22,6 +22,7 @@ extension Home {
         @ObservationIgnored @Injected() var overrideStorage: OverrideStorage!
         @ObservationIgnored @Injected() var bluetoothManager: BluetoothStateManager!
         @ObservationIgnored @Injected() var iobService: IOBService!
+        @ObservationIgnored @Injected() var unlockmanager: UnlockManager!
 
         var cgmStateModel: CGMSettings.StateModel {
             CGMSettings.StateModel.shared
@@ -113,6 +114,8 @@ extension Home {
         var shouldRunDeleteOnSettingsChange = true
 
         var showCarbsRequiredBadge: Bool = true
+        var quickBolusAmount1: Decimal = 1.0
+        var quickBolusAmount2: Decimal = 2.0
         private(set) var setupPumpType: PumpConfig.PumpType = .minimed
         var minForecast: [Int] = []
         var maxForecast: [Int] = []
@@ -414,6 +417,8 @@ extension Home {
             bolusDisplayThreshold = settingsManager.settings.bolusDisplayThreshold
             thresholdLines = settingsManager.settings.rulerMarks
             showCarbsRequiredBadge = settingsManager.settings.showCarbsRequiredBadge
+            quickBolusAmount1 = settingsManager.settings.quickBolusAmount1
+            quickBolusAmount2 = settingsManager.settings.quickBolusAmount2
             forecastDisplayType = settingsManager.settings.forecastDisplayType
             isExerciseModeActive = settingsManager.preferences.exerciseMode
             highTTraisesSens = settingsManager.preferences.highTemptargetRaisesSensitivity
@@ -467,6 +472,22 @@ extension Home {
                     displayName: settingsManager.settings.cgm.displayName,
                     subtitle: settingsManager.settings.cgm.subtitle
                 )
+            }
+        }
+
+        func enactQuickBolus(amount: Decimal) async {
+            guard amount > 0 else { return }
+            let delivery = min(
+                Double(truncating: amount as NSDecimalNumber),
+                pumpInitialSettings.maxBolusUnits
+            )
+            do {
+                let authenticated = try await unlockmanager.unlock()
+                if authenticated {
+                    await apsManager.enactBolus(amount: delivery, isSMB: false, callback: nil)
+                }
+            } catch {
+                debug(.default, "Quick bolus authentication error: \(error)")
             }
         }
 
@@ -679,6 +700,8 @@ extension Home.StateModel:
         bolusDisplayThreshold = settingsManager.settings.bolusDisplayThreshold
         showCarbsRequiredBadge = settingsManager.settings.showCarbsRequiredBadge
         forecastDisplayType = settingsManager.settings.forecastDisplayType
+        quickBolusAmount1 = settingsManager.settings.quickBolusAmount1
+        quickBolusAmount2 = settingsManager.settings.quickBolusAmount2
         cgmAvailable = (fetchGlucoseManager.cgmGlucoseSourceType != CGMType.none)
         displayPumpStatusHighlightMessage()
         displayPumpStatusBadge()

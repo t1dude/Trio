@@ -328,6 +328,12 @@ enum SettingItems {
             view: .appDiagnostics,
             searchContents: ["Anonymized Data Sharing"],
             path: ["Features", "App Diagnostics"]
+        ),
+        SettingItem(
+            title: "Quick Bolus",
+            view: .quickBolus,
+            searchContents: ["Quick Bolus", "Preset 1", "Preset 2"],
+            path: ["Features", "Custom Features", "Quick Bolus"]
         )
     ]
 
