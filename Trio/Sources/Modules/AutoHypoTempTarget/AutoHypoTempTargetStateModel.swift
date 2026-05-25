@@ -18,8 +18,7 @@ extension AutoHypoTempTarget {
             subscribeSetting(\.autoHypoTempTargetBGThreshold, on: $bgThreshold) { bgThreshold = $0 }
         }
 
-        @MainActor
-        private func loadPresets() async {
+        @MainActor private func loadPresets() async {
             do {
                 let ids = try await provider.tempTargetsStorage.fetchForTempTargetPresets()
                 let viewContext = CoreDataStack.shared.persistentContainer.viewContext
