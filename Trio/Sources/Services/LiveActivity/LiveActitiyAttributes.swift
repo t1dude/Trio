@@ -9,6 +9,8 @@ struct LiveActivityAttributes: ActivityAttributes {
         case cob
         case updatedLabel
         case totalDailyDose
+        case totalDailyDoseCalendarDay
+        case eventualBG = "uamPredBG"
         case empty
 
         static let defaultItems: [Self] = [.currentGlucoseLarge, .iob, .cob, .updatedLabel]
@@ -26,6 +28,7 @@ struct LiveActivityAttributes: ActivityAttributes {
         let glucoseColorScheme: String
         let useDetailedViewIOS: Bool
         let useDetailedViewWatchOS: Bool
+        let useAlternativeViewIOS: Bool
         let detailedViewState: ContentAdditionalState
 
         /// true for the first state that is set on the activity
@@ -38,6 +41,8 @@ struct LiveActivityAttributes: ActivityAttributes {
         let cob: Decimal
         let iob: Decimal
         let tdd: Decimal
+        let tddCalendarDay: Decimal
+        let eventualBG: Decimal
         let isOverrideActive: Bool
         let overrideName: String
         let overrideDate: Date

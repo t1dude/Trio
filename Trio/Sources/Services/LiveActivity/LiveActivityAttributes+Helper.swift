@@ -108,6 +108,8 @@ extension LiveActivityAttributes.ContentState {
             cob: Decimal(determination?.cob ?? 0),
             iob: iob ?? 0 as Decimal,
             tdd: determination?.tdd ?? 0 as Decimal,
+            tddCalendarDay: determination?.tddCalendarDay ?? 0 as Decimal,
+            eventualBG: determination?.eventualBG ?? 0,
             isOverrideActive: override?.isActive ?? false,
             overrideName: override?.overrideName ?? "Override",
             overrideDate: override?.date ?? Date(),
@@ -142,6 +144,7 @@ extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: settings.glucoseColorScheme.rawValue,
             useDetailedViewIOS: settings.lockScreenView == .detailed,
             useDetailedViewWatchOS: settings.smartStackView == .detailed,
+            useAlternativeViewIOS: settings.useAlternativeWidget,
             detailedViewState: detailedState,
             isInitialState: false
         )

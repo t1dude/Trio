@@ -116,6 +116,8 @@ private extension LiveActivityAttributes.ContentState {
             cob: 20,
             iob: 1.5,
             tdd: 43.21,
+            tddCalendarDay: 0,
+            eventualBG: 142,
             isOverrideActive: false,
             overrideName: "Exercise",
             overrideDate: Date().addingTimeInterval(-3600),
@@ -149,6 +151,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: false,
             useDetailedViewWatchOS: false,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -167,6 +170,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: false,
             useDetailedViewWatchOS: false,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -185,6 +189,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: false,
             useDetailedViewWatchOS: false,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -204,6 +209,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: false,
             useDetailedViewWatchOS: false,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -222,6 +228,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: false,
             useDetailedViewWatchOS: false,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -240,6 +247,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: false,
             useDetailedViewWatchOS: false,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -259,6 +267,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: true,
             useDetailedViewWatchOS: true,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -279,6 +288,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: true,
             useDetailedViewWatchOS: true,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -299,6 +309,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: true,
             useDetailedViewWatchOS: true,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -320,6 +331,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: true,
             useDetailedViewWatchOS: true,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -340,6 +352,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: true,
             useDetailedViewWatchOS: true,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )
@@ -360,6 +373,7 @@ private extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: "staticColor",
             useDetailedViewIOS: true,
             useDetailedViewWatchOS: true,
+            useAlternativeViewIOS: false,
             detailedViewState: detailedViewState,
             isInitialState: false
         )

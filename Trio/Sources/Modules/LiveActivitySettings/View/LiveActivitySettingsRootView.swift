@@ -165,7 +165,7 @@ extension LiveActivitySettings {
                                 }.padding(.top)
                             }.padding(.bottom)
 
-                            if state.lockScreenView == .detailed {
+                            if state.lockScreenView == .detailed || state.useAlternativeWidget {
                                 HStack {
                                     NavigationLink(
                                         "Widget Configuration",
@@ -174,6 +174,17 @@ extension LiveActivitySettings {
                                             state: state
                                         )
                                     ).foregroundStyle(Color.accentColor)
+                                }
+                            }
+
+                            Toggle(isOn: $state.useAlternativeWidget) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Alternative Widget Layout")
+                                    Text(
+                                        "Large glucose circle on the left, mini chart and your selected KPIs on the right. Overrides the style selection above."
+                                    )
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                                 }
                             }
                         }.listRowBackground(Color.chart)
