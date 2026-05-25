@@ -53,6 +53,7 @@ enum Screen: Identifiable, Hashable {
     case appDiagnostics
     case settingsExport
     case treatmentsSettings
+    case autoHypoTempTarget
 
     var id: Int { String(reflecting: self).hashValue }
 }
@@ -174,6 +175,8 @@ extension Screen {
             SettingsExport.RootView(resolver: resolver)
         case .treatmentsSettings:
             TreatmentsSettingsView(resolver: resolver, state: Settings.StateModel())
+        case .autoHypoTempTarget:
+            AutoHypoTempTarget.RootView(resolver: resolver)
         }
     }
 

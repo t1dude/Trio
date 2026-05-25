@@ -29,6 +29,14 @@ struct FeatureSettingsView: BaseView {
             .listRowBackground(Color.chart)
 
             Section(
+                header: Text("Custom Features"),
+                content: {
+                    Text("Auto Hypo Temp Target").navigationLink(to: .autoHypoTempTarget, from: self)
+                }
+            )
+            .listRowBackground(Color.chart)
+
+            Section(
                 header: Text("Trio Personalization"),
                 content: {
                     Text("User Interface").navigationLink(to: .userInterfaceSettings, from: self)

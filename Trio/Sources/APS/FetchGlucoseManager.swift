@@ -47,6 +47,7 @@ final class BaseFetchGlucoseManager: FetchGlucoseManager, Injectable {
     @Injected() var pluginCGMManager: PluginManager!
     @Injected() var calibrationService: CalibrationService!
     @Injected() var trioAlertManager: TrioAlertManager!
+    @Injected() var tempTargetsStorage: TempTargetsStorage!
 
     private var lifetime = Lifetime()
     private let timer = DispatchTimer(timeInterval: 1.minutes.timeInterval)
@@ -318,9 +319,72 @@ final class BaseFetchGlucoseManager: FetchGlucoseManager, Injectable {
             expectedCGMReadingInterval: cgmManager?.expectedGlucoseSampleInterval
         )
 
+        if settingsManager.settings.autoHypoTempTargetEnabled,
+           let latestBG = filtered.last?.glucose
+        {
+            await runAutoHypoTempTarget(latestGlucose: latestBG)
+        }
+
         deviceDataManager.heartbeat(date: Date())
 
         endBackgroundTaskSafely(&backgroundTaskID, taskName: "Glucose Store and Heartbeat Decision")
+    }
+
+    private func runAutoHypoTempTarget(latestGlucose: Int) async {
+        let settings = settingsManager.settings
+        guard !settings.autoHypoTempTargetPresetName.isEmpty else { return }
+
+        let threshold = Double(truncating: settings.autoHypoTempTargetBGThreshold as NSDecimalNumber)
+        guard Double(latestGlucose) <= threshold else { return }
+
+        guard tempTargetsStorage.current() == nil else { return }
+
+        if let cooldownUntil = PropertyPersistentFlags.shared.autoHypoTempTargetCooldownUntil,
+           Date() < cooldownUntil
+        {
+            return
+        }
+
+        let presetIDs = (try? await tempTargetsStorage.fetchForTempTargetPresets()) ?? []
+        let context = CoreDataStack.shared.newTaskContext()
+        guard let preset = await context.perform({
+            presetIDs
+                .compactMap { try? context.existingObject(with: $0) as? TempTargetStored }
+                .first(where: { $0.name == settings.autoHypoTempTargetPresetName })
+        }) else {
+            debug(.deviceManager, "AutoHypoTempTarget: preset '\(settings.autoHypoTempTargetPresetName)' not found")
+            return
+        }
+
+        let targetValue = preset.target?.decimalValue ?? 100
+        let durationValue = preset.duration?.decimalValue ?? 60
+        let halfBasalValue = preset.halfBasalTarget?.decimalValue
+
+        let tempTarget = TempTarget(
+            name: preset.name,
+            createdAt: Date(),
+            targetTop: targetValue,
+            targetBottom: targetValue,
+            duration: durationValue,
+            enteredBy: TempTarget.local,
+            reason: TempTarget.custom,
+            isPreset: false,
+            enabled: true,
+            halfBasalTarget: halfBasalValue
+        )
+
+        do {
+            try await tempTargetsStorage.storeTempTarget(tempTarget: tempTarget)
+            tempTargetsStorage.saveTempTargetsToStorage([tempTarget])
+            Foundation.NotificationCenter.default.post(name: .didUpdateTempTargetConfiguration, object: nil)
+
+            let durationSeconds = TimeInterval(Int(durationValue) * 60)
+            PropertyPersistentFlags.shared.autoHypoTempTargetCooldownUntil = Date().addingTimeInterval(durationSeconds)
+
+            debug(.deviceManager, "AutoHypoTempTarget: activated '\(preset.name ?? "")' at BG \(latestGlucose) mg/dL")
+        } catch {
+            debug(.deviceManager, "AutoHypoTempTarget: failed to store temp target: \(error)")
+        }
     }
 
     func sourceInfo() -> [String: Any]? {

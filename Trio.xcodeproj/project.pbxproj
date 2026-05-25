@@ -733,6 +733,10 @@
 		DD1745462C55C61500211FAC /* AutosensSettingsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1745452C55C61500211FAC /* AutosensSettingsProvider.swift */; };
 		DD1745482C55C61D00211FAC /* AutosensSettingsStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1745472C55C61D00211FAC /* AutosensSettingsStateModel.swift */; };
 		DD17454B2C55C62800211FAC /* AutosensSettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD17454A2C55C62800211FAC /* AutosensSettingsRootView.swift */; };
+		1BE49AE84C6149B796C781DD /* AutoHypoTempTargetDataFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F30B5887EF954A44ACADB9DA /* AutoHypoTempTargetDataFlow.swift */; };
+		72FF85B30F6D47609F71B7D9 /* AutoHypoTempTargetProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A4D5B2B125457E9A132DB7 /* AutoHypoTempTargetProvider.swift */; };
+		894563E37FFD4947810A1CE5 /* AutoHypoTempTargetStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC554B8CC9504941BE14CBE0 /* AutoHypoTempTargetStateModel.swift */; };
+		D1AB16FACD4E4697B8A18608 /* AutoHypoTempTargetRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A53733E4034B9F92D176B3 /* AutoHypoTempTargetRootView.swift */; };
 		DD17454E2C55CA4D00211FAC /* UnitsLimitsSettingsDataFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD17454D2C55CA4D00211FAC /* UnitsLimitsSettingsDataFlow.swift */; };
 		DD1745502C55CA5500211FAC /* UnitsLimitsSettingsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD17454F2C55CA5500211FAC /* UnitsLimitsSettingsProvider.swift */; };
 		DD1745522C55CA5D00211FAC /* UnitsLimitsSettingsStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD1745512C55CA5D00211FAC /* UnitsLimitsSettingsStateModel.swift */; };
@@ -1790,6 +1794,10 @@
 		DD1745452C55C61500211FAC /* AutosensSettingsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutosensSettingsProvider.swift; sourceTree = "<group>"; };
 		DD1745472C55C61D00211FAC /* AutosensSettingsStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutosensSettingsStateModel.swift; sourceTree = "<group>"; };
 		DD17454A2C55C62800211FAC /* AutosensSettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutosensSettingsRootView.swift; sourceTree = "<group>"; };
+		F30B5887EF954A44ACADB9DA /* AutoHypoTempTargetDataFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoHypoTempTargetDataFlow.swift; sourceTree = "<group>"; };
+		73A4D5B2B125457E9A132DB7 /* AutoHypoTempTargetProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoHypoTempTargetProvider.swift; sourceTree = "<group>"; };
+		FC554B8CC9504941BE14CBE0 /* AutoHypoTempTargetStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoHypoTempTargetStateModel.swift; sourceTree = "<group>"; };
+		42A53733E4034B9F92D176B3 /* AutoHypoTempTargetRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoHypoTempTargetRootView.swift; sourceTree = "<group>"; };
 		DD17454D2C55CA4D00211FAC /* UnitsLimitsSettingsDataFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitsLimitsSettingsDataFlow.swift; sourceTree = "<group>"; };
 		DD17454F2C55CA5500211FAC /* UnitsLimitsSettingsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitsLimitsSettingsProvider.swift; sourceTree = "<group>"; };
 		DD1745512C55CA5D00211FAC /* UnitsLimitsSettingsStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitsLimitsSettingsStateModel.swift; sourceTree = "<group>"; };
@@ -2342,6 +2350,7 @@
 				DDD163032C4C67B400CD525A /* Adjustments */,
 				DD1745382C55BF8B00211FAC /* AlgorithmAdvancedSettings */,
 				DDF690FE2DA2C9EE008BF16C /* AppDiagnostics */,
+				EBE5B95C289C4C28B3F6498E /* AutoHypoTempTarget */,
 				DD7E1E30000000000000000B /* Telemetry */,
 				DD1745422C55C5C400211FAC /* AutosensSettings */,
 				A42F1FEDFFD0DDE00AAD54D3 /* BasalProfileEditor */,
@@ -4175,6 +4184,25 @@
 			path = AutosensSettings;
 			sourceTree = "<group>";
 		};
+		EBE5B95C289C4C28B3F6498E /* AutoHypoTempTarget */ = {
+			isa = PBXGroup;
+			children = (
+				9E447116CC164540B445C4C2 /* View */,
+				F30B5887EF954A44ACADB9DA /* AutoHypoTempTargetDataFlow.swift */,
+				73A4D5B2B125457E9A132DB7 /* AutoHypoTempTargetProvider.swift */,
+				FC554B8CC9504941BE14CBE0 /* AutoHypoTempTargetStateModel.swift */,
+			);
+			path = AutoHypoTempTarget;
+			sourceTree = "<group>";
+		};
+		9E447116CC164540B445C4C2 /* View */ = {
+			isa = PBXGroup;
+			children = (
+				42A53733E4034B9F92D176B3 /* AutoHypoTempTargetRootView.swift */,
+			);
+			path = View;
+			sourceTree = "<group>";
+		};
 		DD1745492C55C62000211FAC /* View */ = {
 			isa = PBXGroup;
 			children = (
@@ -5267,6 +5295,10 @@
 				DD1745482C55C61D00211FAC /* AutosensSettingsStateModel.swift in Sources */,
 				3B4550532D862C0000551B0D /* PumpHistoryEvent+Duplicates.swift in Sources */,
 				DD1745462C55C61500211FAC /* AutosensSettingsProvider.swift in Sources */,
+				1BE49AE84C6149B796C781DD /* AutoHypoTempTargetDataFlow.swift in Sources */,
+				72FF85B30F6D47609F71B7D9 /* AutoHypoTempTargetProvider.swift in Sources */,
+				894563E37FFD4947810A1CE5 /* AutoHypoTempTargetStateModel.swift in Sources */,
+				D1AB16FACD4E4697B8A18608 /* AutoHypoTempTargetRootView.swift in Sources */,
 				DD6A4E802DBEC3EE008C4B26 /* StartupForceCloseWarningStepView.swift in Sources */,
 				DDA6E2852D2361F800C2988C /* LoopStatusView.swift in Sources */,
 				DD30BA122E07764300DA677C /* Profile+TherapySettingGetter.swift in Sources */,

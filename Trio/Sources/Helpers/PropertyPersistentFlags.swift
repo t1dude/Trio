@@ -50,4 +50,6 @@ final class PropertyPersistentFlags {
     // production constant in TelemetryClient. Surfaced as a hidden field in
     // App Diagnostics for local testing against a dev server.
     @PersistedProperty(key: "telemetryDebugServerURL") var telemetryDebugServerURL: String?
+
+    @PersistedProperty(key: "autoHypoTempTargetCooldownUntil") var autoHypoTempTargetCooldownUntil: Date?
 }
