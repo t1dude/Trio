@@ -262,6 +262,18 @@ enum SettingItems {
             path: ["Features", "Remote Control"]
         ),
         SettingItem(
+            title: "Auto Hypo Temp Target",
+            view: .autoHypoTempTarget,
+            searchContents: [
+                "Enable Automatic Hypo Temp Target",
+                "Temp Target Preset",
+                "BG Trigger Threshold",
+                "Hypo",
+                "Auto Temp Target"
+            ],
+            path: ["Features", "Custom Features", "Auto Hypo Temp Target"]
+        ),
+        SettingItem(
             title: "User Interface",
             view: .userInterfaceSettings,
             searchContents: [
