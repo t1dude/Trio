@@ -57,6 +57,10 @@ struct LiveActivityView: View {
             }
             .addLiveActivityModifiers(isWatchOS: true)
 
+        } else if context.state.useAlternativeViewIOS {
+            LiveActivityAlternativeView(context: context, glucoseColor: glucoseColor)
+                .addLiveActivityModifiers(isWatchOS: false)
+
         } else if context.state.useDetailedViewIOS {
             VStack {
                 LiveActivityChartView(context: context, additionalState: context.state.detailedViewState)
@@ -126,6 +130,16 @@ struct LiveActivityView: View {
                                 LiveActivityUpdatedLabelView(context: context, isDetailedLayout: true)
                             case .totalDailyDose:
                                 LiveActivityTotalDailyDoseView(
+                                    context: context,
+                                    additionalState: context.state.detailedViewState
+                                )
+                            case .totalDailyDoseCalendarDay:
+                                LiveActivityTotalDailyDoseCalendarDayView(
+                                    context: context,
+                                    additionalState: context.state.detailedViewState
+                                )
+                            case .eventualBG:
+                                LiveActivityGlucoseForecastView(
                                     context: context,
                                     additionalState: context.state.detailedViewState
                                 )

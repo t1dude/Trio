@@ -9,11 +9,15 @@ extension LiveActivitySettings {
         @Published var useLiveActivity = false
         @Published var lockScreenView: LockScreenView = .simple
         @Published var smartStackView: LockScreenView = .simple
+        @Published var displayGlucoseForecasts = false
+        @Published var useAlternativeWidget = false
         override func subscribe() {
             units = settingsManager.settings.units
             subscribeSetting(\.useLiveActivity, on: $useLiveActivity) { useLiveActivity = $0 }
             subscribeSetting(\.lockScreenView, on: $lockScreenView) { lockScreenView = $0 }
             subscribeSetting(\.smartStackView, on: $smartStackView) { smartStackView = $0 }
+            subscribeSetting(\.displayGlucoseForecasts, on: $displayGlucoseForecasts) { displayGlucoseForecasts = $0 }
+            subscribeSetting(\.useAlternativeWidget, on: $useAlternativeWidget) { useAlternativeWidget = $0 }
         }
     }
 }
