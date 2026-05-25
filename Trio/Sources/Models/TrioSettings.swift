@@ -82,6 +82,9 @@ struct TrioSettings: JSON, Equatable, Encodable {
     var autoHypoTempTargetPresetName: String = ""
     var autoHypoTempTargetBGThreshold: Decimal = 80
 
+    var quickBolusAmount1: Decimal = 1.0
+    var quickBolusAmount2: Decimal = 2.0
+
     /// Selected Garmin watchface (Trio or SwissAlpine)
     var garminWatchface: GarminWatchface = .trio
     var garminDatafield: GarminDatafield = .none
@@ -366,6 +369,14 @@ extension TrioSettings: Decodable {
 
         if let requireAdjustmentsConfirmation = try? container.decode(Bool.self, forKey: .requireAdjustmentsConfirmation) {
             settings.requireAdjustmentsConfirmation = requireAdjustmentsConfirmation
+        }
+
+        if let quickBolusAmount1 = try? container.decode(Decimal.self, forKey: .quickBolusAmount1) {
+            settings.quickBolusAmount1 = quickBolusAmount1
+        }
+
+        if let quickBolusAmount2 = try? container.decode(Decimal.self, forKey: .quickBolusAmount2) {
+            settings.quickBolusAmount2 = quickBolusAmount2
         }
 
         if let useSwiftOref = try? container.decode(Bool.self, forKey: .useSwiftOref) {

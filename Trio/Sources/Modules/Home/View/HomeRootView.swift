@@ -33,6 +33,9 @@ extension Home {
         @State var showTreatments = false
         @State var selectedTab: Int = 0
         @State var lastSelectedTab: Int = 0
+        @State var showQuickBolusPresets: Bool = false
+        @State var quickBolusAmount: Decimal = 0
+        @State var showQuickBolusConfirm: Bool = false
         @State var showPumpSelection: Bool = false
         @State var showCGMSelection: Bool = false
         @State var notificationsDisabled = false
@@ -1101,8 +1104,9 @@ extension Home {
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .blur(radius: state.waitForSuggestion ? 8 : 0)
             .onChange(of: selectedTab) {
+                // Tag 99 (the + item) is handled by the transparent overlay in body;
+                // reset immediately if it somehow gets selected through UIKit directly.
                 if selectedTab == 99 {
-                    state.showModal(for: .treatmentView)
                     selectedTab = lastSelectedTab
                 } else {
                     lastSelectedTab = selectedTab
@@ -1113,6 +1117,24 @@ extension Home {
             }
         }
 
+        private func formatQuickBolusLabel(_ amount: Decimal) -> String {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.maximumFractionDigits = 2
+            formatter.minimumFractionDigits = 0
+            let formatted = formatter.string(from: amount as NSDecimalNumber) ?? amount.description
+            return "\(formatted) U"
+        }
+
+        private func formatQuickBolusConfirmTitle(_ amount: Decimal) -> String {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .decimal
+            formatter.maximumFractionDigits = 2
+            formatter.minimumFractionDigits = 0
+            let formatted = formatter.string(from: amount as NSDecimalNumber) ?? amount.description
+            return String(localized: "Deliver \(formatted) U?")
+        }
+
         var body: some View {
             ZStack(alignment: .center) {
                 tabBar()
@@ -1120,6 +1142,59 @@ extension Home {
                 if state.waitForSuggestion {
                     CustomProgressView(text: String(localized: "Updating IOB...", comment: "Progress text when updating IOB"))
                 }
+
+                // Transparent overlay covering the centre tab-bar slot (1/5 of width, bottom edge).
+                // Intercepts touches before UIKit to allow independent tap and long-press handling.
+                VStack(spacing: 0) {
+                    Spacer()
+                    HStack(spacing: 0) {
+                        Color.clear.frame(maxWidth: .infinity)
+                        Color.clear.frame(maxWidth: .infinity)
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                state.showModal(for: .treatmentView)
+                            }
+                            .onLongPressGesture(minimumDuration: 0.5) {
+                                showQuickBolusPresets = true
+                            }
+                        Color.clear.frame(maxWidth: .infinity)
+                        Color.clear.frame(maxWidth: .infinity)
+                    }
+                    .frame(height: 83)
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(!state.waitForSuggestion)
+            }
+            .confirmationDialog(
+                String(localized: "Quick Bolus"),
+                isPresented: $showQuickBolusPresets,
+                titleVisibility: .visible
+            ) {
+                if state.quickBolusAmount1 > 0 {
+                    Button(formatQuickBolusLabel(state.quickBolusAmount1)) {
+                        quickBolusAmount = state.quickBolusAmount1
+                        showQuickBolusConfirm = true
+                    }
+                }
+                if state.quickBolusAmount2 > 0 {
+                    Button(formatQuickBolusLabel(state.quickBolusAmount2)) {
+                        quickBolusAmount = state.quickBolusAmount2
+                        showQuickBolusConfirm = true
+                    }
+                }
+                Button(String(localized: "Cancel"), role: .cancel) {}
+            }
+            .confirmationDialog(
+                formatQuickBolusConfirmTitle(quickBolusAmount),
+                isPresented: $showQuickBolusConfirm,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "Deliver"), role: .destructive) {
+                    Task { await state.enactQuickBolus(amount: quickBolusAmount) }
+                }
+                Button(String(localized: "Cancel"), role: .cancel) {}
             }
         }
     }

@@ -27,6 +27,11 @@
 		190EBCC629FF138000BA767D /* UserInterfaceSettingsProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190EBCC529FF138000BA767D /* UserInterfaceSettingsProvider.swift */; };
 		190EBCC829FF13AA00BA767D /* UserInterfaceSettingsStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190EBCC729FF13AA00BA767D /* UserInterfaceSettingsStateModel.swift */; };
 		190EBCCB29FF13CB00BA767D /* UserInterfaceSettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 190EBCCA29FF13CB00BA767D /* UserInterfaceSettingsRootView.swift */; };
+		FA2B3C4D5E6F70819243A5C6 /* QuickBolusDataFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2B3C4D5E6F70819243A5B6 /* QuickBolusDataFlow.swift */; };
+		FA2B3C4D5E6F70819243A5C7 /* QuickBolusProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2B3C4D5E6F70819243A5B7 /* QuickBolusProvider.swift */; };
+		FA2B3C4D5E6F70819243A5C8 /* QuickBolusStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2B3C4D5E6F70819243A5B8 /* QuickBolusStateModel.swift */; };
+		FA2B3C4D5E6F70819243A5C9 /* QuickBolusRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2B3C4D5E6F70819243A5B9 /* QuickBolusRootView.swift */; };
+		FA2B3C4D5E6F70819243A5CA /* TabBarLongPressDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA2B3C4D5E6F70819243A5BA /* TabBarLongPressDetector.swift */; };
 		191F62682AD6B05A004D7911 /* NightscoutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191F62672AD6B05A004D7911 /* NightscoutSettings.swift */; };
 		1935364028496F7D001E0B16 /* TrioCustomOrefVariables.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1935363F28496F7D001E0B16 /* TrioCustomOrefVariables.swift */; };
 		193F6CDD2A512C8F001240FD /* Loops.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193F6CDC2A512C8F001240FD /* Loops.swift */; };
@@ -976,6 +981,11 @@
 		190EBCC529FF138000BA767D /* UserInterfaceSettingsProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInterfaceSettingsProvider.swift; sourceTree = "<group>"; };
 		190EBCC729FF13AA00BA767D /* UserInterfaceSettingsStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInterfaceSettingsStateModel.swift; sourceTree = "<group>"; };
 		190EBCCA29FF13CB00BA767D /* UserInterfaceSettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserInterfaceSettingsRootView.swift; sourceTree = "<group>"; };
+		FA2B3C4D5E6F70819243A5B6 /* QuickBolusDataFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickBolusDataFlow.swift; sourceTree = "<group>"; };
+		FA2B3C4D5E6F70819243A5B7 /* QuickBolusProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickBolusProvider.swift; sourceTree = "<group>"; };
+		FA2B3C4D5E6F70819243A5B8 /* QuickBolusStateModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickBolusStateModel.swift; sourceTree = "<group>"; };
+		FA2B3C4D5E6F70819243A5B9 /* QuickBolusRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickBolusRootView.swift; sourceTree = "<group>"; };
+		FA2B3C4D5E6F70819243A5BA /* TabBarLongPressDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarLongPressDetector.swift; sourceTree = "<group>"; };
 		191F62672AD6B05A004D7911 /* NightscoutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightscoutSettings.swift; sourceTree = "<group>"; };
 		1935363F28496F7D001E0B16 /* TrioCustomOrefVariables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrioCustomOrefVariables.swift; sourceTree = "<group>"; };
 		193F6CDC2A512C8F001240FD /* Loops.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Loops.swift; sourceTree = "<group>"; };
@@ -1999,6 +2009,25 @@
 			path = View;
 			sourceTree = "<group>";
 		};
+		FA2B3C4D5E6F70819243A5DE /* QuickBolus */ = {
+			isa = PBXGroup;
+			children = (
+				FA2B3C4D5E6F70819243A5B6 /* QuickBolusDataFlow.swift */,
+				FA2B3C4D5E6F70819243A5B7 /* QuickBolusProvider.swift */,
+				FA2B3C4D5E6F70819243A5B8 /* QuickBolusStateModel.swift */,
+				FA2B3C4D5E6F70819243A5DF /* View */,
+			);
+			path = QuickBolus;
+			sourceTree = "<group>";
+		};
+		FA2B3C4D5E6F70819243A5DF /* View */ = {
+			isa = PBXGroup;
+			children = (
+				FA2B3C4D5E6F70819243A5B9 /* QuickBolusRootView.swift */,
+			);
+			path = View;
+			sourceTree = "<group>";
+		};
 		192F0FF5276AC36D0085BE4D /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
@@ -2156,6 +2185,7 @@
 				D533BF261CDC1C3F871E7BFD /* NightscoutConfig */,
 				BD47FD142D88AACC0043966B /* Onboarding */,
 				99C01B871ACAB3F32CE755C7 /* PumpConfig */,
+				FA2B3C4D5E6F70819243A5DE /* QuickBolus */,
 				DD9ECB6B2CA99FA400AA7C45 /* RemoteControlConfig */,
 				3811DE3825C9D4A100A708ED /* Settings */,
 				110AEDEA2C51A0AE00615CC9 /* ShortcutsConfig */,
@@ -2249,6 +2279,7 @@
 			isa = PBXGroup;
 			children = (
 				3811DE2E25C9D49500A708ED /* HomeRootView.swift */,
+				FA2B3C4D5E6F70819243A5BA /* TabBarLongPressDetector.swift */,
 				3833B51E260264AC003021B3 /* Chart */,
 				3833B51F260264B6003021B3 /* Header */,
 			);
@@ -4826,6 +4857,11 @@
 				38A0363B25ECF07E00FCBB52 /* GlucoseStorage.swift in Sources */,
 				65070A332BFDCB83006F213F /* TidepoolStartView.swift in Sources */,
 				190EBCC629FF138000BA767D /* UserInterfaceSettingsProvider.swift in Sources */,
+				FA2B3C4D5E6F70819243A5C6 /* QuickBolusDataFlow.swift in Sources */,
+				FA2B3C4D5E6F70819243A5C7 /* QuickBolusProvider.swift in Sources */,
+				FA2B3C4D5E6F70819243A5C8 /* QuickBolusStateModel.swift in Sources */,
+				FA2B3C4D5E6F70819243A5C9 /* QuickBolusRootView.swift in Sources */,
+				FA2B3C4D5E6F70819243A5CA /* TabBarLongPressDetector.swift in Sources */,
 				38E98A2725F52C9300C0CED0 /* CollectionIssueReporter.swift in Sources */,
 				E00EEC0427368630002FF094 /* SecurityAssembly.swift in Sources */,
 				3811DEE825CA063400A708ED /* Injected.swift in Sources */,
