@@ -306,12 +306,15 @@ final class LiveActivityData: ObservableObject {
                             glucoseColorScheme: settings.glucoseColorScheme.rawValue,
                             useDetailedViewIOS: false,
                             useDetailedViewWatchOS: false,
+                            useAlternativeViewIOS: false,
                             detailedViewState: LiveActivityAttributes.ContentAdditionalState(
                                 chart: [],
                                 rotationDegrees: 0,
                                 cob: 0,
                                 iob: 0,
                                 tdd: 0,
+                                tddCalendarDay: 0,
+                                eventualBG: 0,
                                 isOverrideActive: false,
                                 overrideName: "",
                                 overrideDate: Date.now,
@@ -322,7 +325,11 @@ final class LiveActivityData: ObservableObject {
                                 tempTargetDate: Date.now,
                                 tempTargetDuration: 0,
                                 tempTargetTarget: 0,
-                                widgetItems: []
+                                widgetItems: [],
+                                minForecast: [],
+                                maxForecast: [],
+                                forecastLines: [],
+                                forecastDisplayType: ForecastDisplayType.cone.rawValue
                             ),
                             isInitialState: true
                         ),
