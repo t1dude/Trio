@@ -32,6 +32,7 @@ extension Home {
         @State var isMenuPresented = false
         @State var showTreatments = false
         @State var selectedTab: Int = 0
+        @State var lastSelectedTab: Int = 0
         @State var showPumpSelection: Bool = false
         @State var showCGMSelection: Bool = false
         @State var notificationsDisabled = false
@@ -1063,65 +1064,53 @@ extension Home {
         }
 
         @ViewBuilder func tabBar() -> some View {
-            ZStack(alignment: .bottom) {
-                TabView(selection: $selectedTab) {
-                    let carbsRequiredBadge: String? = {
-                        guard let carbsRequired = state.enactedAndNonEnactedDeterminations.first?.carbsRequired,
-                              state.showCarbsRequiredBadge
-                        else {
-                            return nil
-                        }
-                        let carbsRequiredDecimal = Decimal(carbsRequired)
-                        if carbsRequiredDecimal > state.settingsManager.settings.carbsRequiredThreshold {
-                            let numberAsNSNumber = NSDecimalNumber(decimal: carbsRequiredDecimal)
-                            return (Formatter.decimalFormatterWithTwoFractionDigits.string(from: numberAsNSNumber) ?? "") + " g"
-                        }
+            TabView(selection: $selectedTab) {
+                let carbsRequiredBadge: String? = {
+                    guard let carbsRequired = state.enactedAndNonEnactedDeterminations.first?.carbsRequired,
+                          state.showCarbsRequiredBadge
+                    else {
                         return nil
-                    }()
-
-                    NavigationStack { mainView() }
-                        .tabItem { Label("Main", systemImage: "chart.xyaxis.line") }
-                        .badge(carbsRequiredBadge).tag(0)
-
-                    NavigationStack { History.RootView(resolver: resolver) }
-                        .tabItem { Label("History", systemImage: historySFSymbol) }.tag(1)
-
-                    Spacer()
-
-                    NavigationStack { Adjustments.RootView(resolver: resolver) }
-                        .tabItem {
-                            Label(
-                                "Adjustments",
-                                systemImage: "slider.horizontal.2.gobackward"
-                            ) }.tag(2)
-
-                    NavigationStack(path: self.$settingsPath) {
-                        Settings.RootView(resolver: resolver) }
-                        .environment(settingsSearchHighlight)
-                        .tabItem { Label(
-                            "Settings",
-                            systemImage: "gear"
-                        ) }.tag(3)
-                }
-                .tint(Color.tabBar)
-
-                Button(
-                    action: {
-                        state.showModal(for: .treatmentView) },
-                    label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 40))
-                            .foregroundStyle(Color.tabBar)
-                            .padding(.vertical, 2)
-                            .padding(.horizontal, 24)
                     }
-                )
-            }.ignoresSafeArea(.keyboard, edges: .bottom).blur(radius: state.waitForSuggestion ? 8 : 0)
-                .onChange(of: selectedTab) {
+                    let carbsRequiredDecimal = Decimal(carbsRequired)
+                    if carbsRequiredDecimal > state.settingsManager.settings.carbsRequiredThreshold {
+                        let numberAsNSNumber = NSDecimalNumber(decimal: carbsRequiredDecimal)
+                        return (Formatter.decimalFormatterWithTwoFractionDigits.string(from: numberAsNSNumber) ?? "") + " g"
+                    }
+                    return nil
+                }()
+
+                NavigationStack { mainView() }
+                    .tabItem { Image(systemName: "chart.xyaxis.line") }
+                    .badge(carbsRequiredBadge).tag(0)
+
+                NavigationStack { History.RootView(resolver: resolver) }
+                    .tabItem { Image(systemName: historySFSymbol) }.tag(1)
+
+                Color.clear
+                    .tabItem { Image(systemName: "plus") }.tag(99)
+
+                NavigationStack { Adjustments.RootView(resolver: resolver) }
+                    .tabItem { Image(systemName: "slider.horizontal.2.gobackward") }.tag(2)
+
+                NavigationStack(path: self.$settingsPath) {
+                    Settings.RootView(resolver: resolver) }
+                    .environment(settingsSearchHighlight)
+                    .tabItem { Image(systemName: "gear") }.tag(3)
+            }
+            .tint(Color.tabBar)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .blur(radius: state.waitForSuggestion ? 8 : 0)
+            .onChange(of: selectedTab) {
+                if selectedTab == 99 {
+                    state.showModal(for: .treatmentView)
+                    selectedTab = lastSelectedTab
+                } else {
+                    lastSelectedTab = selectedTab
                     if !settingsPath.isEmpty {
                         settingsPath = NavigationPath()
                     }
                 }
+            }
         }
 
         var body: some View {
