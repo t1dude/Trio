@@ -328,7 +328,7 @@ struct LiveActivityWidgetConfiguration: BaseView {
                 .font(.caption)
                 .foregroundStyle(.primary)
 
-            Text("TDD (today)").font(.caption2).foregroundStyle(.primary)
+            Text("TDD (d)").font(.caption2).foregroundStyle(.primary)
         }
     }
 
