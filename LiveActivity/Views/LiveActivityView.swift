@@ -133,8 +133,8 @@ struct LiveActivityView: View {
                                     context: context,
                                     additionalState: context.state.detailedViewState
                                 )
-                            case .uamPredBG:
-                                LiveActivityUAMPredBGView(
+                            case .eventualBG:
+                                LiveActivityGlucoseForecastView(
                                     context: context,
                                     additionalState: context.state.detailedViewState
                                 )

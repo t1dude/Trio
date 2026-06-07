@@ -116,7 +116,7 @@ private extension LiveActivityAttributes.ContentState {
             cob: 20,
             iob: 1.5,
             tdd: 43.21,
-            uamPredBG: 142,
+            eventualBG: 142,
             isOverrideActive: false,
             overrideName: "Exercise",
             overrideDate: Date().addingTimeInterval(-3600),

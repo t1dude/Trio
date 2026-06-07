@@ -35,7 +35,7 @@ extension LiveActivityManager {
             key: "deliverAt",
             ascending: false,
             fetchLimit: 1,
-            propertiesToFetch: ["cob", "currentTarget", "deliverAt"]
+            propertiesToFetch: ["cob", "currentTarget", "deliverAt", "eventualBG"]
         )
 
         let tddResults = try await CoreDataStack.shared.fetchEntitiesAsync(
@@ -46,17 +46,6 @@ extension LiveActivityManager {
             ascending: false,
             fetchLimit: 1,
             propertiesToFetch: ["total"]
-        )
-
-        // Fetch the UAM forecast via a separate managed-object fetch with prefetched relationships
-        let uamResults = try await CoreDataStack.shared.fetchEntitiesAsync(
-            ofType: OrefDetermination.self,
-            onContext: context,
-            predicate: NSPredicate.predicateFor30MinAgoForDetermination,
-            key: "deliverAt",
-            ascending: false,
-            fetchLimit: 1,
-            relationshipKeyPathsForPrefetching: ["forecasts.forecastValues"]
         )
 
         return try await context.perform {
@@ -70,22 +59,12 @@ extension LiveActivityManager {
 
             let tddValue = (tddResults.first?["total"] as? NSDecimalNumber)?.decimalValue ?? 0
 
-            var uamPredBG: Decimal = 0
-            if let uamDeterminations = uamResults as? [OrefDetermination],
-               let uamForecast = uamDeterminations.first?.forecasts?.first(where: { $0.type == "uam" }),
-               let forecastValues = uamForecast.forecastValues,
-               !forecastValues.isEmpty
-            {
-                let lastValue = forecastValues.sorted { $0.index < $1.index }.last?.value ?? 0
-                uamPredBG = Decimal(lastValue)
-            }
-
             return DeterminationData(
                 cob: (determination["cob"] as? Int) ?? 0,
                 tdd: tddValue,
                 target: (determination["currentTarget"] as? NSDecimalNumber)?.decimalValue ?? 0,
                 date: determination["deliverAt"] as? Date ?? nil,
-                uamPredBG: uamPredBG
+                eventualBG: (determination["eventualBG"] as? NSDecimalNumber)?.decimalValue ?? 0
             )
         }
     }

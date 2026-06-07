@@ -2,20 +2,20 @@ import Foundation
 import SwiftUI
 import WidgetKit
 
-struct LiveActivityUAMPredBGView: View {
+struct LiveActivityGlucoseForecastView: View {
     var context: ActivityViewContext<LiveActivityAttributes>
     var additionalState: LiveActivityAttributes.ContentAdditionalState
 
     private var displayValue: String {
-        guard additionalState.uamPredBG > 0 else { return "--" }
+        guard additionalState.eventualBG > 0 else { return "--" }
         let isMgdL = context.state.unit == "mg/dL"
         if isMgdL {
             let formatter = NumberFormatter()
             formatter.numberStyle = .decimal
             formatter.maximumFractionDigits = 0
-            return formatter.string(from: additionalState.uamPredBG as NSDecimalNumber) ?? "--"
+            return formatter.string(from: additionalState.eventualBG as NSDecimalNumber) ?? "--"
         } else {
-            return additionalState.uamPredBG.asMmolL.formattedAsMmolL
+            return additionalState.eventualBG.asMmolL.formattedAsMmolL
         }
     }
 

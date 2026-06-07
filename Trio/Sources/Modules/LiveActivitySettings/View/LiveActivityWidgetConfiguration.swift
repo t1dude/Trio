@@ -211,8 +211,8 @@ struct LiveActivityWidgetConfiguration: BaseView {
             return AnyView(updatedLabelPreview)
         case .totalDailyDose:
             return AnyView(totalDailyDosePreview)
-        case .uamPredBG:
-            return AnyView(uamPredBGPreview)
+        case .eventualBG:
+            return AnyView(glucoseForecastPreview)
         }
     }
 
@@ -321,7 +321,7 @@ struct LiveActivityWidgetConfiguration: BaseView {
         }
     }
 
-    private var uamPredBGPreview: some View {
+    private var glucoseForecastPreview: some View {
         VStack(spacing: 2) {
             Text("142")
                 .fontWeight(.bold)
@@ -385,7 +385,7 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
     case cob
     case updatedLabel
     case totalDailyDose
-    case uamPredBG
+    case eventualBG
 
     var id: String { rawValue }
 
@@ -416,10 +416,10 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
             return String(localized: "Last Updated", comment: "Live Activity widget icon label for Last Updated")
         case .totalDailyDose:
             return String(localized: "Total Daily Dose", comment: "Live Activity widget icon label for Total Daily Dose")
-        case .uamPredBG:
+        case .eventualBG:
             return String(
-                localized: "UAM Glucose Forecast",
-                comment: "Live Activity widget icon label for UAM Glucose Forecast"
+                localized: "Glucose Forecast",
+                comment: "Live Activity widget icon label for Glucose Forecast"
             )
         }
     }

@@ -142,8 +142,8 @@ struct LiveActivityAlternativeView: View {
             LiveActivityUpdatedLabelView(context: context, isDetailedLayout: true)
         case .totalDailyDose:
             LiveActivityTotalDailyDoseView(context: context, additionalState: context.state.detailedViewState)
-        case .uamPredBG:
-            LiveActivityUAMPredBGView(context: context, additionalState: context.state.detailedViewState)
+        case .eventualBG:
+            LiveActivityGlucoseForecastView(context: context, additionalState: context.state.detailedViewState)
         case .empty:
             EmptyView()
         }
