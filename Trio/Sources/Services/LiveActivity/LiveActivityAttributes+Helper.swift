@@ -133,6 +133,7 @@ extension LiveActivityAttributes.ContentState {
             glucoseColorScheme: settings.glucoseColorScheme.rawValue,
             useDetailedViewIOS: settings.lockScreenView == .detailed,
             useDetailedViewWatchOS: settings.smartStackView == .detailed,
+            useAlternativeViewIOS: settings.useAlternativeWidget,
             detailedViewState: detailedState,
             isInitialState: false
         )

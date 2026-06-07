@@ -73,6 +73,7 @@ struct TrioSettings: JSON, Equatable, Encodable {
     var useLiveActivity: Bool = false
     var lockScreenView: LockScreenView = .simple
     var smartStackView: LockScreenView = .simple
+    var useAlternativeWidget: Bool = false
     var bolusShortcut: BolusShortcutLimit = .notAllowed
     var timeInRangeType: TimeInRangeType = .timeInTightRange
     var requireAdjustmentsConfirmation: Bool = false
