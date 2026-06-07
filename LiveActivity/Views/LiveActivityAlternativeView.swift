@@ -46,11 +46,18 @@ struct LiveActivityAlternativeView: View {
             )
             .rotationEffect(.degrees(context.state.detailedViewState.rotationDegrees))
 
-            Text(context.state.bg)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(context.isStale ? Color.secondary : Color.white)
-                .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+            VStack(spacing: 0) {
+                Text(context.state.bg)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(context.isStale ? Color.secondary : Color.white)
+                    .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+
+                Text(context.state.change.isEmpty ? "--" : context.state.change)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(context.isStale ? Color.secondary : Color.white)
+                    .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+            }
         }
         .frame(width: circleSize, height: circleSize)
     }
@@ -111,7 +118,7 @@ struct LiveActivityAlternativeView: View {
         }
     }
 
-    @ViewBuilder  private func kpiItem(_ item: LiveActivityAttributes.LiveActivityItem) -> some View {
+    @ViewBuilder private func kpiItem(_ item: LiveActivityAttributes.LiveActivityItem) -> some View {
         switch item {
         case .currentGlucose:
             VStack {
