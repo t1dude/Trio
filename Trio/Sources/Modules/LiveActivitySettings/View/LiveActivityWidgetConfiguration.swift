@@ -211,6 +211,8 @@ struct LiveActivityWidgetConfiguration: BaseView {
             return AnyView(updatedLabelPreview)
         case .totalDailyDose:
             return AnyView(totalDailyDosePreview)
+        case .uamPredBG:
+            return AnyView(uamPredBGPreview)
         }
     }
 
@@ -319,6 +321,16 @@ struct LiveActivityWidgetConfiguration: BaseView {
         }
     }
 
+    private var uamPredBGPreview: some View {
+        VStack(spacing: 2) {
+            Text("142")
+                .fontWeight(.bold)
+                .font(.caption)
+                .foregroundStyle(.primary)
+            Text("Forecast").font(.caption2).foregroundStyle(.primary)
+        }
+    }
+
     private func loadOrder() {
         if let savedItems = UserDefaults.standard.loadLiveActivityOrder() {
             selectedItems = savedItems.count == 4 ? savedItems : savedItems + Array(repeating: nil, count: 4 - savedItems.count)
@@ -373,6 +385,7 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
     case cob
     case updatedLabel
     case totalDailyDose
+    case uamPredBG
 
     var id: String { rawValue }
 
@@ -403,6 +416,11 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
             return String(localized: "Last Updated", comment: "Live Activity widget icon label for Last Updated")
         case .totalDailyDose:
             return String(localized: "Total Daily Dose", comment: "Live Activity widget icon label for Total Daily Dose")
+        case .uamPredBG:
+            return String(
+                localized: "UAM Glucose Forecast",
+                comment: "Live Activity widget icon label for UAM Glucose Forecast"
+            )
         }
     }
 }

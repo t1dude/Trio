@@ -133,6 +133,11 @@ struct LiveActivityView: View {
                                     context: context,
                                     additionalState: context.state.detailedViewState
                                 )
+                            case .uamPredBG:
+                                LiveActivityUAMPredBGView(
+                                    context: context,
+                                    additionalState: context.state.detailedViewState
+                                )
                             case .empty:
                                 Text("").frame(width: 50, height: 50)
                             }
