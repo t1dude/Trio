@@ -9,7 +9,7 @@ struct LiveActivityAttributes: ActivityAttributes {
         case cob
         case updatedLabel
         case totalDailyDose
-        case eventualBG
+        case eventualBG = "uamPredBG"
         case empty
 
         static let defaultItems: [Self] = [.currentGlucoseLarge, .iob, .cob, .updatedLabel]

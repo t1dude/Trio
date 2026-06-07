@@ -385,7 +385,7 @@ enum LiveActivityItem: String, CaseIterable, Identifiable {
     case cob
     case updatedLabel
     case totalDailyDose
-    case eventualBG
+    case eventualBG = "uamPredBG"
 
     var id: String { rawValue }
 
