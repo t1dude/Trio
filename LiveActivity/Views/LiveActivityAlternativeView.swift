@@ -49,7 +49,7 @@ struct LiveActivityAlternativeView: View {
             Text(context.state.bg)
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .minimumScaleFactor(0.6)
-                .foregroundStyle(context.isStale ? .secondary : glucoseColor)
+                .foregroundStyle(context.isStale ? Color.secondary : Color.white)
                 .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
         }
         .frame(width: circleSize, height: circleSize)
@@ -93,52 +93,48 @@ struct LiveActivityAlternativeView: View {
     }
 
     private var kpiRow: some View {
-        HStack {
-            if context.state.detailedViewState.widgetItems.contains(where: { $0 != .empty }) {
-                ForEach(
-                    Array(context.state.detailedViewState.widgetItems.enumerated()),
-                    id: \.element
-                ) { index, widgetItem in
-                    switch widgetItem {
-                    case .currentGlucose:
-                        VStack {
-                            LiveActivityBGLabelView(
-                                context: context,
-                                additionalState: context.state.detailedViewState
-                            )
-                            HStack {
-                                LiveActivityGlucoseDeltaLabelView(context: context, glucoseColor: .primary)
-                                if !context.isStale, let direction = context.state.direction {
-                                    Text(direction).font(.headline)
-                                }
-                            }
-                        }
-                    case .currentGlucoseLarge:
-                        LiveActivityBGLabelLargeView(context: context, glucoseColor: glucoseColor)
-                    case .iob:
-                        LiveActivityIOBLabelView(context: context, additionalState: context.state.detailedViewState)
-                    case .cob:
-                        LiveActivityCOBLabelView(context: context, additionalState: context.state.detailedViewState)
-                    case .updatedLabel:
-                        LiveActivityUpdatedLabelView(context: context, isDetailedLayout: true)
-                    case .totalDailyDose:
-                        LiveActivityTotalDailyDoseView(context: context, additionalState: context.state.detailedViewState)
-                    case .empty:
-                        Text("").frame(width: 50, height: 50)
-                    }
+        let items = Array(
+            context.state.detailedViewState.widgetItems
+                .filter { $0 != .empty }
+                .prefix(3)
+                .enumerated()
+        )
 
-                    if index < context.state.detailedViewState.widgetItems.count - 1 {
-                        let currentItem = context.state.detailedViewState.widgetItems[index]
-                        let nextItem = context.state.detailedViewState.widgetItems[index + 1]
-                        if currentItem != .empty, nextItem != .empty {
-                            Divider()
-                                .foregroundStyle(.primary)
-                                .fontWeight(.bold)
-                                .frame(width: 10)
-                        }
+        return HStack(spacing: 0) {
+            ForEach(items, id: \.offset) { index, widgetItem in
+                if index > 0 {
+                    Divider().padding(.vertical, 6)
+                }
+                kpiItem(widgetItem)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    @ViewBuilder  private func kpiItem(_ item: LiveActivityAttributes.LiveActivityItem) -> some View {
+        switch item {
+        case .currentGlucose:
+            VStack {
+                LiveActivityBGLabelView(context: context, additionalState: context.state.detailedViewState)
+                HStack {
+                    LiveActivityGlucoseDeltaLabelView(context: context, glucoseColor: .primary)
+                    if !context.isStale, let direction = context.state.direction {
+                        Text(direction).font(.headline)
                     }
                 }
             }
+        case .currentGlucoseLarge:
+            LiveActivityBGLabelLargeView(context: context, glucoseColor: glucoseColor)
+        case .iob:
+            LiveActivityIOBLabelView(context: context, additionalState: context.state.detailedViewState)
+        case .cob:
+            LiveActivityCOBLabelView(context: context, additionalState: context.state.detailedViewState)
+        case .updatedLabel:
+            LiveActivityUpdatedLabelView(context: context, isDetailedLayout: true)
+        case .totalDailyDose:
+            LiveActivityTotalDailyDoseView(context: context, additionalState: context.state.detailedViewState)
+        case .empty:
+            EmptyView()
         }
     }
 }
