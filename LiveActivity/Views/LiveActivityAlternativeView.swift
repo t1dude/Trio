@@ -46,15 +46,17 @@ struct LiveActivityAlternativeView: View {
             )
             .rotationEffect(.degrees(context.state.detailedViewState.rotationDegrees))
 
-            VStack(spacing: 0) {
+            VStack(spacing: 1) {
                 Text(context.state.bg)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
                     .minimumScaleFactor(0.6)
+                    .multilineTextAlignment(.center)
                     .foregroundStyle(context.isStale ? Color.secondary : Color.white)
                     .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
 
                 Text(context.state.change.isEmpty ? "--" : context.state.change)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .multilineTextAlignment(.center)
                     .foregroundStyle(context.isStale ? Color.secondary : Color.white)
                     .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
             }
@@ -155,9 +157,9 @@ struct AlternativeWidgetTrendCircle: View {
     let color: Color
     let size: CGFloat
 
-    private var lineWidth: CGFloat { size * (10.0 / 130.0) }
+    private var lineWidth: CGFloat { size * (6.0 / 130.0) }
     private var arrowSize: CGFloat { size * (35.0 / 130.0) }
-    private var arrowOffset: CGFloat { size * (78.0 / 130.0) }
+    private var arrowOffset: CGFloat { size * (85.0 / 130.0) }
 
     var body: some View {
         ZStack {
@@ -184,16 +186,16 @@ struct AlternativeWidgetTrendCircle: View {
     }
 }
 
-/// Triangle shape for the trend arrow, with a slightly rounded base.
+/// Identical to the Triangle shape used in CurrentGlucoseView on the main app's home screen.
+/// Tip sits 15/35 from the top edge; the base is gently concave inward.
 private struct TrendArrow: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let cornerRadius: CGFloat = 2
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cornerRadius))
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY + rect.height * (15.0 / 35.0)))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
         path.addQuadCurve(
-            to: CGPoint(x: rect.minX, y: rect.maxY - cornerRadius),
-            control: CGPoint(x: rect.midX, y: rect.maxY)
+            to: CGPoint(x: rect.minX, y: rect.maxY),
+            control: CGPoint(x: rect.midX, y: rect.midY + rect.height * (10.0 / 35.0))
         )
         path.closeSubpath()
         return path
