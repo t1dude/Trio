@@ -48,14 +48,14 @@ struct LiveActivityAlternativeView: View {
 
             VStack(spacing: 1) {
                 Text(context.state.bg)
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.6)
+                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .minimumScaleFactor(0.5)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(context.isStale ? Color.secondary : Color.white)
                     .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
 
                 Text(context.state.change.isEmpty ? "--" : context.state.change)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(context.isStale ? Color.secondary : Color.white)
                     .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
