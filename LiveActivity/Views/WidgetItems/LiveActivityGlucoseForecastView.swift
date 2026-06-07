@@ -15,7 +15,7 @@ struct LiveActivityGlucoseForecastView: View {
             formatter.maximumFractionDigits = 0
             return formatter.string(from: additionalState.eventualBG as NSDecimalNumber) ?? "--"
         } else {
-            return additionalState.eventualBG.asMmolL.formattedAsMmolL
+            return additionalState.eventualBG.formattedAsMmolL
         }
     }
 
