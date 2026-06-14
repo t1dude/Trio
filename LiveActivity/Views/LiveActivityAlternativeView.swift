@@ -47,6 +47,7 @@ struct LiveActivityAlternativeView: View {
         // Total badge area = two 12pt pills + 2pt gap; single active pill expands to fill all of it
         let badgeAreaHeight: CGFloat = 26
         let pillHeight: CGFloat = activeCount == 1 ? badgeAreaHeight : (badgeAreaHeight - 2) / 2
+        let badgeFontSize: CGFloat = activeCount == 1 ? 12 : 8
 
         return VStack(spacing: 8) {
             ZStack {
@@ -78,7 +79,7 @@ struct LiveActivityAlternativeView: View {
                 VStack(spacing: 2) {
                     if hasOverride {
                         Text(context.state.detailedViewState.overrideName)
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: badgeFontSize, weight: .bold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -91,7 +92,7 @@ struct LiveActivityAlternativeView: View {
                     }
                     if hasTT {
                         Text(context.state.detailedViewState.tempTargetName)
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: badgeFontSize, weight: .bold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .truncationMode(.tail)
