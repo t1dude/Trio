@@ -80,7 +80,7 @@ struct LiveActivityAlternativeView: View {
                             .truncationMode(.tail)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)
-                            .frame(width: arrowSize)
+                            .frame(width: circleSize)
                             .background {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(Color.purple.opacity(colorScheme == .dark ? 0.6 : 0.8))
@@ -94,14 +94,13 @@ struct LiveActivityAlternativeView: View {
                             .truncationMode(.tail)
                             .padding(.horizontal, 4)
                             .padding(.vertical, 2)
-                            .frame(width: arrowSize)
+                            .frame(width: circleSize)
                             .background {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(Color("LoopGreen").opacity(colorScheme == .dark ? 0.6 : 0.8))
                             }
                     }
                 }
-                .offset(x: arrowOffset)
             }
         }
         .frame(width: circleSize)
