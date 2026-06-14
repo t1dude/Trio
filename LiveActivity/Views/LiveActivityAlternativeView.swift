@@ -33,7 +33,7 @@ struct LiveActivityAlternativeView: View {
         if context.state.isInitialState {
             Text("Live Activity Expired. Open Trio to Refresh").minimumScaleFactor(0.01)
         } else {
-            HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
                 glucoseCircle
                 rightPanel
             }
@@ -43,8 +43,12 @@ struct LiveActivityAlternativeView: View {
     private var glucoseCircle: some View {
         let hasOverride = context.state.detailedViewState.isOverrideActive
         let hasTT = context.state.detailedViewState.isTempTargetActive
+        let activeCount = (hasOverride ? 1 : 0) + (hasTT ? 1 : 0)
+        // Total badge area = two 12pt pills + 2pt gap; single active pill expands to fill all of it
+        let badgeAreaHeight: CGFloat = 26
+        let pillHeight: CGFloat = activeCount == 1 ? badgeAreaHeight : (badgeAreaHeight - 2) / 2
 
-        return VStack(spacing: 2) {
+        return VStack(spacing: 8) {
             ZStack {
                 AlternativeWidgetTrendCircle(
                     gradient: angularGradient,
@@ -79,8 +83,7 @@ struct LiveActivityAlternativeView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .frame(width: circleSize)
+                            .frame(width: circleSize, height: pillHeight)
                             .background {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(Color.purple.opacity(colorScheme == .dark ? 0.6 : 0.8))
@@ -93,8 +96,7 @@ struct LiveActivityAlternativeView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .frame(width: circleSize)
+                            .frame(width: circleSize, height: pillHeight)
                             .background {
                                 RoundedRectangle(cornerRadius: 6)
                                     .fill(Color("LoopGreen").opacity(colorScheme == .dark ? 0.6 : 0.8))
