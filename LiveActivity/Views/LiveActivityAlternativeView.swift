@@ -109,7 +109,7 @@ struct LiveActivityAlternativeView: View {
     private var rightPanel: some View {
         VStack(spacing: 4) {
             LiveActivityChartView(context: context, additionalState: context.state.detailedViewState)
-                .padding(.leading, 6)
+                .padding(.leading, 16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             kpiRow
