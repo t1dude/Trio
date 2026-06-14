@@ -26,6 +26,9 @@ struct LiveActivityAlternativeView: View {
     private let triangleColor = Color(red: 0.262745098, green: 0.7333333333, blue: 0.9137254902)
     private let circleSize: CGFloat = 100
 
+    private var arrowSize: CGFloat { circleSize * (35.0 / 130.0) }
+    private var arrowOffset: CGFloat { circleSize * (85.0 / 130.0) }
+
     var body: some View {
         if context.state.isInitialState {
             Text("Live Activity Expired. Open Trio to Refresh").minimumScaleFactor(0.01)
@@ -38,62 +41,77 @@ struct LiveActivityAlternativeView: View {
     }
 
     private var glucoseCircle: some View {
-        ZStack {
-            AlternativeWidgetTrendCircle(
-                gradient: angularGradient,
-                color: triangleColor,
-                size: circleSize
-            )
-            .rotationEffect(.degrees(context.state.detailedViewState.rotationDegrees))
+        let hasOverride = context.state.detailedViewState.isOverrideActive
+        let hasTT = context.state.detailedViewState.isTempTargetActive
 
-            VStack(spacing: 1) {
-                Text(context.state.bg)
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
-                    .minimumScaleFactor(0.5)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(context.isStale ? Color.secondary : Color.white)
-                    .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+        return VStack(spacing: 2) {
+            ZStack {
+                AlternativeWidgetTrendCircle(
+                    gradient: angularGradient,
+                    color: triangleColor,
+                    size: circleSize
+                )
+                .rotationEffect(.degrees(context.state.detailedViewState.rotationDegrees))
 
-                Text(context.state.change.isEmpty ? "--" : context.state.change)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(context.isStale ? Color.secondary : Color.white)
-                    .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+                VStack(spacing: 1) {
+                    Text(context.state.bg)
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .minimumScaleFactor(0.5)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(context.isStale ? Color.secondary : Color.white)
+                        .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+
+                    Text(context.state.change.isEmpty ? "--" : context.state.change)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(context.isStale ? Color.secondary : Color.white)
+                        .strikethrough(context.isStale, pattern: .solid, color: .red.opacity(0.6))
+                }
+            }
+            .frame(width: circleSize, height: circleSize)
+
+            if hasOverride || hasTT {
+                VStack(spacing: 2) {
+                    if hasOverride {
+                        Text(context.state.detailedViewState.overrideName)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .frame(width: arrowSize)
+                            .background {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.purple.opacity(colorScheme == .dark ? 0.6 : 0.8))
+                            }
+                    }
+                    if hasTT {
+                        Text(context.state.detailedViewState.tempTargetName)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .frame(width: arrowSize)
+                            .background {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color("LoopGreen").opacity(colorScheme == .dark ? 0.6 : 0.8))
+                            }
+                    }
+                }
+                .offset(x: arrowOffset)
             }
         }
-        .frame(width: circleSize, height: circleSize)
+        .frame(width: circleSize)
     }
 
     private var rightPanel: some View {
         VStack(spacing: 4) {
             LiveActivityChartView(context: context, additionalState: context.state.detailedViewState)
+                .padding(.leading, 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .topLeading) {
-                    HStack(spacing: 3) {
-                        if context.state.detailedViewState.isOverrideActive {
-                            Text(context.state.detailedViewState.overrideName)
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color.purple.opacity(colorScheme == .dark ? 0.6 : 0.8))
-                                }
-                        }
-                        if context.state.detailedViewState.isTempTargetActive {
-                            Text(context.state.detailedViewState.tempTargetName)
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 4)
-                                .padding(.vertical, 2)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(Color("LoopGreen").opacity(colorScheme == .dark ? 0.6 : 0.8))
-                                }
-                        }
-                    }
-                }
 
             kpiRow
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
