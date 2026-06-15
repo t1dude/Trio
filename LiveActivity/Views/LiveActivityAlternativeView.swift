@@ -33,7 +33,9 @@ struct LiveActivityAlternativeView: View {
         if context.state.isInitialState {
             Text("Live Activity Expired. Open Trio to Refresh").minimumScaleFactor(0.01)
         } else {
-            HStack(alignment: .top, spacing: 10) {
+            let hasActive = context.state.detailedViewState.isOverrideActive ||
+                context.state.detailedViewState.isTempTargetActive
+            HStack(alignment: hasActive ? .top : .center, spacing: 10) {
                 glucoseCircle
                 rightPanel
             }
