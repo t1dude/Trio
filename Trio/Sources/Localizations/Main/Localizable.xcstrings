@@ -27266,7 +27266,7 @@
       }
     },
     "About Quick Bolus" : {
-      "comment" : "A button that displays a sheet with information about Quick Bolus."
+      "comment" : "Info sheet title for quick bolus feature"
     },
     "About the Process" : {
       "extractionState" : "manual",
@@ -55449,7 +55449,7 @@
       }
     },
     "Based on your bolus history at this time of day" : {
-      "comment" : "A description of the quick bolus confirmation dialog."
+      "comment" : "Subtitle of the quick bolus picker sheet"
     },
     "Basic Insulin Rates & Targets" : {
       "localizations" : {
@@ -93254,10 +93254,10 @@
 
     },
     "Deliver" : {
-
+      "comment" : "Quick bolus confirm button"
     },
     "Deliver %@ U?" : {
-      "comment" : "A button title that asks the user to confirm the amount of insulin to be delivered. The argument is the amount of insulin."
+      "comment" : "Quick bolus confirmation dialog title; %@ is the formatted bolus amount"
     },
     "Delivery limits" : {
       "extractionState" : "manual",
@@ -138084,9 +138084,6 @@
         }
       }
     },
-    "How does this work?" : {
-      "comment" : "A button that shows a message explaining how the Quick Bolus feature works."
-    },
     "How it Works" : {
       "localizations" : {
         "bg" : {
@@ -180708,7 +180705,7 @@
 
     },
     "No Quick Bolus History Yet" : {
-      "comment" : "A message that appears when the user has not yet selected a quick bolus amount."
+      "comment" : "Alert title when no quick bolus history exists"
     },
     "No recent oref algorithm determination." : {
       "localizations" : {
@@ -205258,13 +205255,13 @@
       }
     },
     "Quick Bolus" : {
-      "comment" : "A button that presents a quick bolus selection sheet."
+      "comment" : "Title of the quick bolus picker sheet"
     },
     "Quick Bolus learns from your manual boluses over time. Once you've delivered a few boluses, it will suggest amounts based on what you typically take at this time of day." : {
       "comment" : "Alert body explaining that quick bolus history is empty"
     },
     "Quick Bolus looks at your manual boluses from the past 90 days and suggests the amounts you most commonly take at this time of day.\n\nIt gives more weight to boluses from similar times of day, and treats weekdays and weekends separately. Older entries gradually count less.\n\nTap a suggestion to confirm and deliver it — your normal Face ID or Touch ID approval always applies." : {
-      "comment" : "Info alert body explaining how quick bolus scoring works"
+      "comment" : "Info sheet body explaining how quick bolus scoring works"
     },
     "Raise target glucose when Autosens Ratio is less than 1." : {
       "localizations" : {
@@ -271986,7 +271983,7 @@
       }
     },
     "U" : {
-      "comment" : "Insulin unit\nInsulin unit abbreviation\nInsulin units\nThe short unit display string for international units of insulin\nUnits for bolus amount",
+      "comment" : "Insulin unit\nInsulin unit abbreviation\nThe short unit display string for international units of insulin\nUnits for bolus amount",
       "localizations" : {
         "bg" : {
           "stringUnit" : {
