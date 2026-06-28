@@ -33,9 +33,11 @@ extension Home {
         @State var showTreatments = false
         @State var selectedTab: Int = 0
         @State var lastSelectedTab: Int = 0
-        @State var showQuickBolusPresets: Bool = false
+        @State var showQuickBolusPicker = false
         @State var quickBolusAmount: Decimal = 0
-        @State var showQuickBolusConfirm: Bool = false
+        @State var showQuickBolusConfirm = false
+        @State var showQuickBolusNoHistory = false
+        @State var showQuickBolusInfo = false
         @State var showPumpSelection: Bool = false
         @State var showCGMSelection: Bool = false
         @State var notificationsDisabled = false
@@ -143,13 +145,13 @@ extension Home {
                 cgmSensorExpiresAt: state.cgmSensorExpiresAt,
                 cgmWarmupEndsAt: state.cgmWarmupEndsAt
             )
-                .onTapGesture {
-                    if !state.cgmAvailable {
-                        showCGMSelection.toggle()
-                    } else {
-                        state.shouldDisplayCGMSetupSheet.toggle()
-                    }
+            .onTapGesture {
+                if !state.cgmAvailable {
+                    showCGMSelection.toggle()
+                } else {
+                    state.shouldDisplayCGMSetupSheet.toggle()
                 }
+            }
         }
 
         var pumpView: some View {
@@ -1116,22 +1118,17 @@ extension Home {
             }
         }
 
-        private func formatQuickBolusLabel(_ amount: Decimal) -> String {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 2
-            formatter.minimumFractionDigits = 0
-            let formatted = formatter.string(from: amount as NSDecimalNumber) ?? amount.description
+        private func formatBolusLabel(_ amount: Decimal) -> String {
+            let formatted = Formatter.bolusFormatter.string(from: amount as NSDecimalNumber) ?? amount.description
             return "\(formatted) U"
         }
 
-        private func formatQuickBolusConfirmTitle(_ amount: Decimal) -> String {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 2
-            formatter.minimumFractionDigits = 0
-            let formatted = formatter.string(from: amount as NSDecimalNumber) ?? amount.description
-            return String(localized: "Deliver \(formatted) U?")
+        private func formatBolusConfirmTitle(_ amount: Decimal) -> String {
+            let formatted = Formatter.bolusFormatter.string(from: amount as NSDecimalNumber) ?? amount.description
+            return String(
+                format: String(localized: "Deliver %@ U?", comment: "Quick bolus confirmation dialog title; %@ is the formatted bolus amount"),
+                formatted
+            )
         }
 
         var body: some View {
@@ -1156,7 +1153,14 @@ extension Home {
                                 state.showModal(for: .treatmentView)
                             }
                             .onLongPressGesture(minimumDuration: 0.5) {
-                                showQuickBolusPresets = true
+                                Task {
+                                    await state.loadQuickBolusSuggestions()
+                                    if state.quickBolusHistory.isEmpty {
+                                        showQuickBolusNoHistory = true
+                                    } else {
+                                        showQuickBolusPicker = true
+                                    }
+                                }
                             }
                         Color.clear.frame(maxWidth: .infinity)
                         Color.clear.frame(maxWidth: .infinity)
@@ -1167,33 +1171,57 @@ extension Home {
                 .allowsHitTesting(!state.waitForSuggestion)
             }
             .confirmationDialog(
-                String(localized: "Quick Bolus"),
-                isPresented: $showQuickBolusPresets,
+                String(localized: "Quick Bolus", comment: "Title of the quick bolus picker sheet"),
+                isPresented: $showQuickBolusPicker,
                 titleVisibility: .visible
             ) {
-                if state.quickBolusAmount1 > 0 {
-                    Button(formatQuickBolusLabel(state.quickBolusAmount1)) {
-                        quickBolusAmount = state.quickBolusAmount1
-                        showQuickBolusConfirm = true
-                    }
+                Button(String(localized: "How does this work?", comment: "Quick bolus info button")) {
+                    showQuickBolusInfo = true
                 }
-                if state.quickBolusAmount2 > 0 {
-                    Button(formatQuickBolusLabel(state.quickBolusAmount2)) {
-                        quickBolusAmount = state.quickBolusAmount2
+                ForEach(state.quickBolusHistory, id: \.self) { amount in
+                    Button(formatBolusLabel(amount)) {
+                        quickBolusAmount = amount
                         showQuickBolusConfirm = true
                     }
                 }
                 Button(String(localized: "Cancel"), role: .cancel) {}
+            } message: {
+                Text(String(
+                    localized: "Based on your bolus history at this time of day",
+                    comment: "Subtitle of the quick bolus picker sheet"
+                ))
             }
             .confirmationDialog(
-                formatQuickBolusConfirmTitle(quickBolusAmount),
+                formatBolusConfirmTitle(quickBolusAmount),
                 isPresented: $showQuickBolusConfirm,
                 titleVisibility: .visible
             ) {
-                Button(String(localized: "Deliver"), role: .destructive) {
+                Button(String(localized: "Deliver", comment: "Quick bolus confirm button"), role: .destructive) {
                     Task { await state.enactQuickBolus(amount: quickBolusAmount) }
                 }
                 Button(String(localized: "Cancel"), role: .cancel) {}
+            }
+            .alert(
+                String(localized: "No Quick Bolus History Yet", comment: "Alert title when no quick bolus history exists"),
+                isPresented: $showQuickBolusNoHistory
+            ) {
+                Button(String(localized: "OK"), role: .cancel) {}
+            } message: {
+                Text(String(
+                    localized: "Quick Bolus learns from your manual boluses over time. Once you've delivered a few boluses, it will suggest amounts based on what you typically take at this time of day.",
+                    comment: "Alert body explaining that quick bolus history is empty"
+                ))
+            }
+            .alert(
+                String(localized: "About Quick Bolus", comment: "Info alert title for quick bolus feature"),
+                isPresented: $showQuickBolusInfo
+            ) {
+                Button(String(localized: "OK"), role: .cancel) {}
+            } message: {
+                Text(String(
+                    localized: "Quick Bolus looks at your manual boluses from the past 90 days and suggests the amounts you most commonly take at this time of day.\n\nIt gives more weight to boluses from similar times of day, and treats weekdays and weekends separately. Older entries gradually count less.\n\nTap a suggestion to confirm and deliver it — your normal Face ID or Touch ID approval always applies.",
+                    comment: "Info alert body explaining how quick bolus scoring works"
+                ))
             }
         }
     }

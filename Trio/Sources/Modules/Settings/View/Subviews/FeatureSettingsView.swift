@@ -33,7 +33,6 @@ struct FeatureSettingsView: BaseView {
                 header: Text("Custom Features"),
                 content: {
                     Text("Auto Hypo Temp Target").navigationLink(to: .autoHypoTempTarget, from: self)
-                    Text("Quick Bolus").navigationLink(to: .quickBolus, from: self)
                 }
             )
             .listRowBackground(Color.chart)

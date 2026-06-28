@@ -52,7 +52,6 @@ enum Screen: Identifiable, Hashable {
     case appDiagnostics
     case settingsExport
     case autoHypoTempTarget
-    case quickBolus
 
     var id: Int { String(reflecting: self).hashValue }
 }
@@ -172,8 +171,6 @@ extension Screen {
             SettingsExport.RootView(resolver: resolver)
         case .autoHypoTempTarget:
             AutoHypoTempTarget.RootView(resolver: resolver)
-        case .quickBolus:
-            QuickBolus.RootView(resolver: resolver)
         }
     }
 
