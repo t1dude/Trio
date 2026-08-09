@@ -14,6 +14,7 @@ extension NightscoutConfig {
         @Injected() private var cgmManager: FetchGlucoseManager!
         @Injected() private var storage: FileStorage!
         @Injected() var apsManager: APSManager!
+        @Injected() private var treatmentsBackfillService: TreatmentsBackfillService!
 
         @Published var url = ""
         @Published var secret = ""
@@ -21,6 +22,10 @@ extension NightscoutConfig {
         @Published var isValidURL: Bool = false
         @Published var connecting = false
         @Published var backfilling = false
+        @Published var backfillingTreatments = false
+        @Published var backfillTreatmentsDays: Int = 7
+        @Published var backfillTreatmentsProgress = ""
+        @Published var treatmentsBackfillMessage = ""
         @Published var isUploadEnabled = false // Allow uploads
         @Published var isDownloadEnabled = false // Allow downloads
         @Published var uploadGlucose = true // Upload Glucose
@@ -162,6 +167,49 @@ extension NightscoutConfig {
 
             await MainActor.run {
                 self.backfilling = false
+            }
+        }
+
+        func backfillTreatments() async {
+            await MainActor.run {
+                backfillingTreatments = true
+                backfillTreatmentsProgress = ""
+                treatmentsBackfillMessage = ""
+            }
+
+            do {
+                let summary = try await treatmentsBackfillService.backfill(
+                    days: backfillTreatmentsDays,
+                    progress: { [weak self] text in
+                        Task { @MainActor in self?.backfillTreatmentsProgress = text }
+                    }
+                )
+
+                await MainActor.run {
+                    var result =
+                        "Imported \(summary.carbsImported) carb entries, \(summary.bolusesImported) boluses, " +
+                        "\(summary.tempBasalsImported) temp basals, and \(summary.glucoseImported) glucose readings. " +
+                        "Synthesized TDD for \(summary.daysSynthesized) day(s)."
+                    if summary.daysSkipped.isNotEmpty {
+                        result += " \(summary.daysSkipped.count) day(s) failed and were skipped — you can rerun to retry them."
+                    }
+                    if summary.daysWithNoTreatmentDataInNightscout > 0 {
+                        result +=
+                            " \(summary.daysWithNoTreatmentDataInNightscout) day(s) had no bolus/temp-basal data in " +
+                            "Nightscout at all — those days' TDD reflects scheduled basal only, not a backfill error."
+                    }
+                    treatmentsBackfillMessage = result
+                }
+            } catch {
+                debug(.nightscout, "Treatments backfill failed: \(error)")
+                await MainActor.run {
+                    treatmentsBackfillMessage = "Error: \(error.localizedDescription)"
+                }
+            }
+
+            await MainActor.run {
+                backfillingTreatments = false
+                backfillTreatmentsProgress = ""
             }
         }
 

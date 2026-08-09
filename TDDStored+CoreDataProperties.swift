@@ -13,6 +13,7 @@ public extension TDDStored {
     @NSManaged var tempBasal: NSDecimalNumber?
     @NSManaged var scheduledBasal: NSDecimalNumber?
     @NSManaged var weightedAverage: NSDecimalNumber?
+    @NSManaged var isBackfilled: Bool
 }
 
 extension TDDStored: Identifiable {}
