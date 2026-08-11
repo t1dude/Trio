@@ -11,8 +11,19 @@ struct QuickPickTreatmentsView: View {
     @State private var selectedCarbAmount: Decimal?
     @State private var selectedBolusAmount: Decimal?
 
+    // Same selection criteria as the iOS Quick-Pick Treatments sheet: take the top 3 highest-ranked
+    // suggestions (already score-sorted by `topQuickPickSuggestions`), dedupe defensively, then sort
+    // ascending for display.
+    private var displayedBolusSuggestions: [Decimal] { Self.displayedSuggestions(from: bolusSuggestions, limit: 3) }
+    private var displayedCarbSuggestions: [Decimal] { Self.displayedSuggestions(from: carbSuggestions, limit: 3) }
+
+    private static func displayedSuggestions(from suggestions: [Decimal], limit: Int) -> [Decimal] {
+        var seen = Set<Decimal>()
+        return suggestions.prefix(limit).filter { seen.insert($0).inserted }.sorted()
+    }
+
     private var hasSuggestions: Bool {
-        !bolusSuggestions.isEmpty || !carbSuggestions.isEmpty
+        !displayedBolusSuggestions.isEmpty || !displayedCarbSuggestions.isEmpty
     }
 
     var body: some View {
@@ -21,20 +32,20 @@ struct QuickPickTreatmentsView: View {
                 if hasSuggestions {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
-                            if !carbSuggestions.isEmpty {
+                            if !displayedCarbSuggestions.isEmpty {
                                 suggestionSection(
                                     title: String(localized: "Carbs", comment: "Watch Quick-Pick carb suggestions section title"),
-                                    amounts: carbSuggestions,
+                                    amounts: displayedCarbSuggestions,
                                     selection: $selectedCarbAmount,
                                     color: .orange,
                                     label: carbLabel
                                 )
                             }
 
-                            if !bolusSuggestions.isEmpty {
+                            if !displayedBolusSuggestions.isEmpty {
                                 suggestionSection(
                                     title: String(localized: "Bolus", comment: "Watch Quick-Pick bolus suggestions section title"),
-                                    amounts: bolusSuggestions,
+                                    amounts: displayedBolusSuggestions,
                                     selection: $selectedBolusAmount,
                                     color: .insulin,
                                     label: bolusLabel
