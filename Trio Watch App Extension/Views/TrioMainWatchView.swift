@@ -12,6 +12,7 @@ struct TrioMainWatchView: View {
 
     // view visbility
     @State private var showingTreatmentMenuSheet: Bool = false
+    @State private var showingQuickPickSheet: Bool = false
     @State private var showingOverrideSheet: Bool = false
     // navigation flag for meal bolus combo
     @State private var continueToBolus = false
@@ -152,6 +153,13 @@ struct TrioMainWatchView: View {
                     .controlSize(.large)
                     .buttonStyle(WatchOSButtonStyle(deviceType: state.deviceType))
                     .disabled(isWatchStateDated || isSessionUnreachable)
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                            guard state.enableQuickPickTreatments, !isWatchStateDated, !isSessionUnreachable else { return }
+                            WKInterfaceDevice.current().play(.click)
+                            showingQuickPickSheet = true
+                        }
+                    )
 
                     Button {
                         showingTempTargetSheet = true
@@ -170,6 +178,21 @@ struct TrioMainWatchView: View {
                 .onAppear {
                     // reset the conditional navigation flag when opening
                     continueToBolus = false
+                }
+            }
+            .sheet(isPresented: $showingQuickPickSheet) {
+                QuickPickTreatmentsView(
+                    state: state,
+                    bolusSuggestions: state.quickPickBolusSuggestions,
+                    carbSuggestions: state.quickPickCarbSuggestions
+                ) { didSelectBolus in
+                    showingQuickPickSheet = false
+                    if didSelectBolus {
+                        navigationPath.append(NavigationDestinations.bolusConfirm)
+                    } else {
+                        state.sendCarbsRequest(state.carbsAmount)
+                        navigationPath.append(NavigationDestinations.acknowledgmentPending)
+                    }
                 }
             }
             .sheet(isPresented: $showingOverrideSheet) {

@@ -27,6 +27,9 @@ import WatchConnectivity
     var lastLoopTime: String? = "--"
     var overridePresets: [OverridePresetWatch] = []
     var tempTargetPresets: [TempTargetPresetWatch] = []
+    var enableQuickPickTreatments: Bool = false
+    var quickPickBolusSuggestions: [Decimal] = []
+    var quickPickCarbSuggestions: [Decimal] = []
 
     /// treatments inputs
     /// used to store carbs for combined meal-bolus-treatments
@@ -529,6 +532,18 @@ import WatchConnectivity
                 else { return nil }
                 return TempTargetPresetWatch(name: name, isEnabled: isEnabled)
             }
+        }
+
+        if let enableQuickPickTreatments = message[WatchMessageKeys.enableQuickPickTreatments] as? Bool {
+            self.enableQuickPickTreatments = enableQuickPickTreatments
+        }
+
+        if let quickPickBolusData = message[WatchMessageKeys.quickPickBolusSuggestions] as? [NSNumber] {
+            quickPickBolusSuggestions = quickPickBolusData.map(\.decimalValue)
+        }
+
+        if let quickPickCarbData = message[WatchMessageKeys.quickPickCarbSuggestions] as? [NSNumber] {
+            quickPickCarbSuggestions = quickPickCarbData.map(\.decimalValue)
         }
 
         if let maxBolusValue = message[WatchMessageKeys.maxBolus] {

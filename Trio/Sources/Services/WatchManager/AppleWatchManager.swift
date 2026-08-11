@@ -194,6 +194,18 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
             let overridePresetIds = try await overrideStorage.fetchForOverridePresets()
             let tempTargetPresetIds = try await tempTargetStorage.fetchForTempTargetPresets()
 
+            // Quick-Pick Treatment suggestions (reuses the same fetch/ranking logic as the iOS feature)
+            let quickPickEnabled = settingsManager.settings.enableQuickPickTreatments
+            let quickPickSuggestions: (boluses: [Decimal], carbs: [Decimal])
+            if quickPickEnabled {
+                quickPickSuggestions = await quickPickTreatmentSuggestions(
+                    maxBolusUnits: Double(truncating: settingsManager.pumpSettings.maxBolus as NSDecimalNumber),
+                    maxCarbs: Double(truncating: settingsManager.settings.maxCarbs as NSDecimalNumber)
+                )
+            } else {
+                quickPickSuggestions = ([], [])
+            }
+
             // Get NSManagedObjects
             let glucoseObjects: [GlucoseStored] = try await CoreDataStack.shared
                 .getNSManagedObject(with: glucoseIds, context: context)
@@ -223,6 +235,11 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                     let cob = NSNumber(value: latestDetermination.cob)
                     watchState.cob = Formatter.integerFormatter.string(from: cob)
                 }
+
+                // Set Quick-Pick Treatment suggestions
+                watchState.enableQuickPickTreatments = quickPickEnabled
+                watchState.quickPickBolusSuggestions = quickPickSuggestions.boluses
+                watchState.quickPickCarbSuggestions = quickPickSuggestions.carbs
 
                 // Set override presets with their enabled status
                 watchState.overridePresets = overridePresetObjects.map { override in
@@ -537,6 +554,9 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
                     "isEnabled": preset.isEnabled
                 ]
             },
+            WatchMessageKeys.enableQuickPickTreatments: state.enableQuickPickTreatments,
+            WatchMessageKeys.quickPickBolusSuggestions: state.quickPickBolusSuggestions,
+            WatchMessageKeys.quickPickCarbSuggestions: state.quickPickCarbSuggestions,
             WatchMessageKeys.maxBolus: state.maxBolus,
             WatchMessageKeys.maxCarbs: state.maxCarbs,
             WatchMessageKeys.maxFat: state.maxFat,

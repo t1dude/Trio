@@ -16,6 +16,9 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
     var lastLoopTime: String?
     var overridePresets: [OverridePresetWatch] = []
     var tempTargetPresets: [TempTargetPresetWatch] = []
+    var enableQuickPickTreatments: Bool = false
+    var quickPickBolusSuggestions: [Decimal] = []
+    var quickPickCarbSuggestions: [Decimal] = []
 
     // Safety limits
     var maxBolus: Decimal = 10.0
@@ -36,14 +39,16 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
     var forecastLines: [String: [Double]] = [:] // "iob" / "cob" / "uam" / "zt" -> values
 
     static func == (lhs: WatchState, rhs: WatchState) -> Bool {
-        lhs.date == rhs.date &&
+        let glucoseValuesEqual = lhs.glucoseValues.count == rhs.glucoseValues.count &&
+            zip(lhs.glucoseValues, rhs.glucoseValues).allSatisfy {
+                $0.0.date == $0.1.date && $0.0.glucose == $0.1.glucose && $0.0.color == $0.1.color
+            }
+
+        let coreFieldsEqual = lhs.date == rhs.date &&
             lhs.currentGlucose == rhs.currentGlucose &&
             lhs.trend == rhs.trend &&
             lhs.delta == rhs.delta &&
-            lhs.glucoseValues.count == rhs.glucoseValues.count &&
-            zip(lhs.glucoseValues, rhs.glucoseValues).allSatisfy {
-                $0.0.date == $0.1.date && $0.0.glucose == $0.1.glucose && $0.0.color == $0.1.color
-            } &&
+            glucoseValuesEqual &&
             lhs.minYAxisValue == rhs.minYAxisValue &&
             lhs.maxYAxisValue == rhs.maxYAxisValue &&
             lhs.units == rhs.units &&
@@ -51,8 +56,13 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
             lhs.cob == rhs.cob &&
             lhs.lastLoopTime == rhs.lastLoopTime &&
             lhs.overridePresets == rhs.overridePresets &&
-            lhs.tempTargetPresets == rhs.tempTargetPresets &&
-            lhs.maxBolus == rhs.maxBolus &&
+            lhs.tempTargetPresets == rhs.tempTargetPresets
+
+        let quickPickFieldsEqual = lhs.enableQuickPickTreatments == rhs.enableQuickPickTreatments &&
+            lhs.quickPickBolusSuggestions == rhs.quickPickBolusSuggestions &&
+            lhs.quickPickCarbSuggestions == rhs.quickPickCarbSuggestions
+
+        let settingsFieldsEqual = lhs.maxBolus == rhs.maxBolus &&
             lhs.maxCarbs == rhs.maxCarbs &&
             lhs.maxFat == rhs.maxFat &&
             lhs.maxProtein == rhs.maxProtein &&
@@ -64,6 +74,8 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
             lhs.forecastConeMin == rhs.forecastConeMin &&
             lhs.forecastConeMax == rhs.forecastConeMax &&
             lhs.forecastLines == rhs.forecastLines
+
+        return coreFieldsEqual && quickPickFieldsEqual && settingsFieldsEqual
     }
 
     func hash(into hasher: inout Hasher) {
@@ -84,6 +96,9 @@ struct WatchState: Hashable, Equatable, Sendable, Encodable, Decodable {
         hasher.combine(lastLoopTime)
         hasher.combine(overridePresets)
         hasher.combine(tempTargetPresets)
+        hasher.combine(enableQuickPickTreatments)
+        hasher.combine(quickPickBolusSuggestions)
+        hasher.combine(quickPickCarbSuggestions)
         hasher.combine(maxBolus)
         hasher.combine(maxCarbs)
         hasher.combine(maxFat)

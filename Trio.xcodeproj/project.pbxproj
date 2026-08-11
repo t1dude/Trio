@@ -538,6 +538,7 @@
 		BD4E1A7C2D3686D900D21626 /* StartEndMarkerSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4E1A7B2D3686D400D21626 /* StartEndMarkerSetup.swift */; };
 		BD4ED4FD2CF9D5E8000EDC9C /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4ED4FC2CF9D5E8000EDC9C /* AppState.swift */; };
 		BD54A9592D27FB7800F9C1EE /* OverridePresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD54A9582D27FB6A00F9C1EE /* OverridePresetsView.swift */; };
+		8530194B1B3D94A339A83D52 /* QuickPickTreatmentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4A90B03DAD0CB18CEBF35BF /* QuickPickTreatmentsView.swift */; };
 		BD54A95B2D28087C00F9C1EE /* OverridePresetWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD54A95A2D28087700F9C1EE /* OverridePresetWatch.swift */; };
 		BD54A95C2D2808A300F9C1EE /* OverridePresetWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD54A95A2D28087700F9C1EE /* OverridePresetWatch.swift */; };
 		BD54A9712D281A8100F9C1EE /* TempTargetPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD54A9702D281A7A00F9C1EE /* TempTargetPresetsView.swift */; };
@@ -1576,6 +1577,7 @@
 		BD4E1A7B2D3686D400D21626 /* StartEndMarkerSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartEndMarkerSetup.swift; sourceTree = "<group>"; };
 		BD4ED4FC2CF9D5E8000EDC9C /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		BD54A9582D27FB6A00F9C1EE /* OverridePresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverridePresetsView.swift; sourceTree = "<group>"; };
+		B4A90B03DAD0CB18CEBF35BF /* QuickPickTreatmentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickPickTreatmentsView.swift; sourceTree = "<group>"; };
 		BD54A95A2D28087700F9C1EE /* OverridePresetWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverridePresetWatch.swift; sourceTree = "<group>"; };
 		BD54A9702D281A7A00F9C1EE /* TempTargetPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempTargetPresetsView.swift; sourceTree = "<group>"; };
 		BD54A9722D281A9C00F9C1EE /* TempTargetPresetWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TempTargetPresetWatch.swift; sourceTree = "<group>"; };
@@ -3777,6 +3779,7 @@
 				BDA25F1D2D26D5D800035F34 /* GlucoseChartView.swift */,
 				DD246F052D2836AA0027DDE0 /* GlucoseTrendView.swift */,
 				BD54A9582D27FB6A00F9C1EE /* OverridePresetsView.swift */,
+				B4A90B03DAD0CB18CEBF35BF /* QuickPickTreatmentsView.swift */,
 				BD54A9702D281A7A00F9C1EE /* TempTargetPresetsView.swift */,
 				DD6F63CB2D27F606007D94CF /* TreatmentMenuView.swift */,
 				BDA25F1B2D26BD0300035F34 /* TrendShape.swift */,
@@ -5848,6 +5851,7 @@
 				BD54A9742D281AEF00F9C1EE /* TempTargetPresetWatch.swift in Sources */,
 				BD54A95C2D2808A300F9C1EE /* OverridePresetWatch.swift in Sources */,
 				BD54A9592D27FB7800F9C1EE /* OverridePresetsView.swift in Sources */,
+				8530194B1B3D94A339A83D52 /* QuickPickTreatmentsView.swift in Sources */,
 				BDA25F1E2D26D5DD00035F34 /* GlucoseChartView.swift in Sources */,
 				DDFF204E2DB2C00B00AB8A96 /* WatchStateSnapshot.swift in Sources */,
 				DD6F63CC2D27F615007D94CF /* TreatmentMenuView.swift in Sources */,
