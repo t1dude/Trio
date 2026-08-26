@@ -119,6 +119,8 @@ extension LiveActivityManager {
     /// buffer is included so a temp basal that started just before midnight is clipped
     /// correctly to [00:00, now].
     private func fetchTodayTDD() async throws -> Decimal {
+        let context = CoreDataStack.shared.newTaskContext()
+        context.name = "fetchTodayTDD"
         let startOfToday = Date.startOfToday
         let now = Date()
 
