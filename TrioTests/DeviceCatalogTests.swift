@@ -62,10 +62,17 @@ import UIKit
     // MARK: - CGM source mapping
 
     @Test("Managed CGM entries persist as .plugin, native entries persist as themselves") func testCGMSourceMapping() {
+        // DexKit's direct G6/G7 entries intentionally use `identifierOverride` (see the doc comment on
+        // `CGMCatalogEntry.Source.managed`): DexKit's base class picks the family at runtime, so both
+        // subclasses inherit the same static `pluginIdentifier` and can't be told apart by it alone.
+        let identifierOverrideEntries: Set<String> = ["Dexcom G6 / ONE (direct)", "Dexcom G7 / ONE+ / Stelo (direct)"]
+
         for entry in DeviceCatalog.cgms {
             if entry.managerType != nil {
                 #expect(entry.cgmType == .plugin, "\(entry.name) is manager-backed so it must persist as .plugin")
-                #expect(entry.id == entry.managerType?.pluginIdentifier)
+                if !identifierOverrideEntries.contains(entry.name) {
+                    #expect(entry.id == entry.managerType?.pluginIdentifier)
+                }
             } else {
                 #expect(entry.cgmType.rawValue == entry.id, "\(entry.name) id must be its CGMType raw value")
             }

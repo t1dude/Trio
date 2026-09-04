@@ -48,3 +48,6 @@
 [submodule "LoopAlgorithm"]
 	path = LoopAlgorithm
 	url = https://github.com/loopandlearn/LoopAlgorithm.git
+[submodule "DexKit"]
+	path = DexKit
+	url = https://github.com/nightscout/DexKit.git

@@ -4,6 +4,8 @@ import AccuChekKit
 import CGMBLEKit
 import CGMBLEKitUI
 import DanaKit
+import DexKit
+import DexKitUI
 import EversenseKit
 import Foundation
 import G7SensorKit
@@ -208,7 +210,13 @@ struct CGMCatalogEntry: DeviceCatalogEntry {
         /// Backed by a `CGMType` case other than `.plugin`.
         case native(CGMType)
         /// Backed by a statically linked `CGMManagerUI`; persisted as `CGMType.plugin`.
-        case managed(CGMManagerUI.Type)
+        ///
+        /// `identifierOverride` is for managers whose static `pluginIdentifier` is not unique per catalog
+        /// entry — e.g. DexKit's `DexcomG6CGMManager`/`DexcomG7CGMManager` both inherit their base class's
+        /// identifier, since the base class itself picks the family at runtime. The override lets the entry
+        /// persist the family-specific identifier the manager actually reports once paired (DexKit's own
+        /// `g6PluginIdentifier`/`g7PluginIdentifier`), instead of colliding on the shared static one.
+        case managed(CGMManagerUI.Type, identifierOverride: String? = nil)
 
         /// The value persisted to `TrioSettings.cgm`.
         var cgmType: CGMType {
@@ -222,12 +230,12 @@ struct CGMCatalogEntry: DeviceCatalogEntry {
         var id: String {
             switch self {
             case let .native(type): return type.rawValue
-            case let .managed(manager): return manager.pluginIdentifier
+            case let .managed(manager, override): return override ?? manager.pluginIdentifier
             }
         }
 
         var managerType: CGMManagerUI.Type? {
-            guard case let .managed(manager) = self else { return nil }
+            guard case let .managed(manager, _) = self else { return nil }
             return manager
         }
 
@@ -362,16 +370,30 @@ extension DeviceCatalog {
         // No G5 icon: CGMBLEKitUI ships only "g6", and reusing it would picture the wrong hardware.
         CGMCatalogEntry(.managed(G5CGMManager.self), manufacturer: .dexcom, name: "Dexcom G5"),
         CGMCatalogEntry(
-            .managed(G6CGMManager.self),
+            // Module-qualified: DexKit also exports a public `G6CGMManager`.
+            .managed(CGMBLEKit.G6CGMManager.self),
             manufacturer: .dexcom,
             name: "Dexcom G6 / ONE",
             icon: .uiBundle(identifier: "com.loopkit.CGMBLEKitUI", asset: "g6")
         ),
         CGMCatalogEntry(
-            .managed(G7CGMManager.self),
+            // Module-qualified: DexKit also exports a public `G7CGMManager`.
+            .managed(G7SensorKit.G7CGMManager.self),
             manufacturer: .dexcom,
             name: "Dexcom G7 / ONE+",
             icon: .uiBundle(identifier: "org.loopkit.G7SensorKitUI", asset: "g7")
+        ),
+        CGMCatalogEntry(
+            .managed(DexKit.DexcomG6CGMManager.self, identifierOverride: DexKit.DexcomCGMManager.g6PluginIdentifier),
+            manufacturer: .dexcom,
+            name: "Dexcom G6 / ONE (direct)",
+            icon: .uiBundle(identifier: "org.nightscout.DexKitUI", asset: "g6")
+        ),
+        CGMCatalogEntry(
+            .managed(DexKit.DexcomG7CGMManager.self, identifierOverride: DexKit.DexcomCGMManager.g7PluginIdentifier),
+            manufacturer: .dexcom,
+            name: "Dexcom G7 / ONE+ / Stelo (direct)",
+            icon: .uiBundle(identifier: "org.nightscout.DexKitUI", asset: "g7")
         ),
 
         CGMCatalogEntry(
