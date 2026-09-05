@@ -145,7 +145,11 @@ import UIKit
         // Vendored but deliberately not offered in Trio.
         let excludedCGMs: Set<String> = [
             "DexShareClient", // Dexcom Share: no longer offered
-            "G6SensorKit" // native G6 transport, not wired up in Trio
+            "G6SensorKit", // native G6 transport, not wired up in Trio
+            // DexKitPlugin/Info.plist declares the base class's identifier, but the catalog only ever offers
+            // the family-specific subclasses under their own identifierOverride — see the doc comment on
+            // `CGMCatalogEntry.Source.managed` and DeviceCatalogTests' testCGMSourceMapping.
+            "DexcomCGMManager"
         ]
 
         let missingPumps = declared.pumps.subtracting(DeviceCatalog.pumps.map(\.id))

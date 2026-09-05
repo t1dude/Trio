@@ -138,5 +138,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+     	<key>NSCameraUsageDescription</key>
+     	<string>Camera is used to scan the Data Matrix code on your Dexcom sensor packaging.</string>
+   
 </dict>
 </plist>

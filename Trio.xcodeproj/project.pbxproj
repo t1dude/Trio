@@ -966,6 +966,10 @@
 		F791E17A304AA5690046BCD7 /* DexKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F791E177304AA5690046BCD7 /* DexKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F791E17B304AA5690046BCD7 /* DexKitUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F791E178304AA5690046BCD7 /* DexKitUI.framework */; };
 		F791E17C304AA5690046BCD7 /* DexKitUI.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F791E178304AA5690046BCD7 /* DexKitUI.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F791E6DB304AAB060046BCD7 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = F791E6DA304AAB060046BCD7 /* BigInt */; };
+		F791E6DE304AAB170046BCD7 /* ASN1 in Frameworks */ = {isa = PBXBuildFile; productRef = F791E6DD304AAB170046BCD7 /* ASN1 */; };
+		F791E6E1304AAB2E0046BCD7 /* Digest in Frameworks */ = {isa = PBXBuildFile; productRef = F791E6E0304AAB2E0046BCD7 /* Digest */; };
+		F791E6E4304AAB450046BCD7 /* SwiftECC in Frameworks */ = {isa = PBXBuildFile; productRef = F791E6E3304AAB450046BCD7 /* SwiftECC */; };
 		F816825E28DB441200054060 /* HeartBeatManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F816825D28DB441200054060 /* HeartBeatManager.swift */; };
 		F816826028DB441800054060 /* BluetoothTransmitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F816825F28DB441800054060 /* BluetoothTransmitter.swift */; };
 		F90692AA274B7AAE0037068D /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90692A9274B7AAE0037068D /* HealthKitManager.swift */; };
@@ -2085,8 +2089,10 @@
 				3B4BA7782D8DBD690069D5B8 /* MinimedKit.framework in Frameworks */,
 				3B4BA7762D8DBD690069D5B8 /* LibreTransmitterUI.framework in Frameworks */,
 				3E54EF2C2E476DA40006F54D /* MedtrumKit.framework in Frameworks */,
+				F791E6DE304AAB170046BCD7 /* ASN1 in Frameworks */,
 				F791E17B304AA5690046BCD7 /* DexKitUI.framework in Frameworks */,
 				3B4BA7902D8DC0EC0069D5B8 /* TidepoolServiceKitUI.framework in Frameworks */,
+				F791E6E4304AAB450046BCD7 /* SwiftECC in Frameworks */,
 				3B4BA76A2D8DBD690069D5B8 /* CGMBLEKit.framework in Frameworks */,
 				38E87403274F78C000975559 /* libswiftCoreNFC.tbd in Frameworks */,
 				38E87401274F77E400975559 /* CoreNFC.framework in Frameworks */,
@@ -2102,6 +2108,7 @@
 				CE95BF5B2BA770C300DC3DE3 /* LoopKit.framework in Frameworks */,
 				38B17B6625DD90E0005CAE3D /* SwiftDate in Frameworks */,
 				F791E179304AA5690046BCD7 /* DexKit.framework in Frameworks */,
+				F791E6DB304AAB060046BCD7 /* BigInt in Frameworks */,
 				3833B46D26012030003021B3 /* Algorithms in Frameworks */,
 				3B4BA7822D8DBD690069D5B8 /* RileyLinkBLEKit.framework in Frameworks */,
 				3B4BA76E2D8DBD690069D5B8 /* DanaKit.framework in Frameworks */,
@@ -2113,6 +2120,7 @@
 				3BD9687F2D8DDD8800899469 /* CryptoSwift in Frameworks */,
 				3B4BA7842D8DBD690069D5B8 /* RileyLinkKit.framework in Frameworks */,
 				CE95BF612BA7715900DC3DE3 /* MockKitUI.framework in Frameworks */,
+				F791E6E1304AAB2E0046BCD7 /* Digest in Frameworks */,
 				E0CC2C5C275B9F0F00A7BC71 /* HealthKit.framework in Frameworks */,
 				CE95BF5D2BA770C300DC3DE3 /* LoopKitUI.framework in Frameworks */,
 				3E28F2AB2EB5337F00FB9EEB /* ConnectIQ in Frameworks */,
@@ -4838,6 +4846,10 @@
 				3E28F2AA2EB5337F00FB9EEB /* ConnectIQ */,
 				5E12FE112EBC0000000000A1 /* LoopAlgorithm */,
 				5E12FE112EBC0000000000B1 /* LibreCRKit */,
+				F791E6DA304AAB060046BCD7 /* BigInt */,
+				F791E6DD304AAB170046BCD7 /* ASN1 */,
+				F791E6E0304AAB2E0046BCD7 /* Digest */,
+				F791E6E3304AAB450046BCD7 /* SwiftECC */,
 			);
 			productName = Trio;
 			productReference = 388E595825AD948C0019842D /* Trio.app */;
@@ -5017,6 +5029,10 @@
 				3E28F2A92EB5337F00FB9EEB /* XCRemoteSwiftPackageReference "connectiq-companion-app-sdk-ios" */,
 				5E12FE112EBC0000000000A0 /* XCLocalSwiftPackageReference "LoopAlgorithm" */,
 				5E12FE112EBC0000000000B0 /* XCLocalSwiftPackageReference "LibreCRKit" */,
+				F791E6D9304AAB060046BCD7 /* XCRemoteSwiftPackageReference "BigInt" */,
+				F791E6DC304AAB170046BCD7 /* XCRemoteSwiftPackageReference "ASN1" */,
+				F791E6DF304AAB2E0046BCD7 /* XCRemoteSwiftPackageReference "Digest" */,
+				F791E6E2304AAB450046BCD7 /* XCRemoteSwiftPackageReference "SwiftECC" */,
 			);
 			productRefGroup = 388E595925AD948C0019842D /* Products */;
 			projectDirPath = "";
@@ -6819,6 +6835,38 @@
 				version = 4.0.1;
 			};
 		};
+		F791E6D9304AAB060046BCD7 /* XCRemoteSwiftPackageReference "BigInt" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/BigInt";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.24.0;
+			};
+		};
+		F791E6DC304AAB170046BCD7 /* XCRemoteSwiftPackageReference "ASN1" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/ASN1";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+		F791E6DF304AAB2E0046BCD7 /* XCRemoteSwiftPackageReference "Digest" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/Digest";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.13.0;
+			};
+		};
+		F791E6E2304AAB450046BCD7 /* XCRemoteSwiftPackageReference "SwiftECC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/leif-ibsen/SwiftECC";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.5.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -6881,6 +6929,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DD868FD92E381E1C005D3308 /* XCRemoteSwiftPackageReference "Swift-JWT" */;
 			productName = SwiftJWT;
+		};
+		F791E6DA304AAB060046BCD7 /* BigInt */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F791E6D9304AAB060046BCD7 /* XCRemoteSwiftPackageReference "BigInt" */;
+			productName = BigInt;
+		};
+		F791E6DD304AAB170046BCD7 /* ASN1 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F791E6DC304AAB170046BCD7 /* XCRemoteSwiftPackageReference "ASN1" */;
+			productName = ASN1;
+		};
+		F791E6E0304AAB2E0046BCD7 /* Digest */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F791E6DF304AAB2E0046BCD7 /* XCRemoteSwiftPackageReference "Digest" */;
+			productName = Digest;
+		};
+		F791E6E3304AAB450046BCD7 /* SwiftECC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F791E6E2304AAB450046BCD7 /* XCRemoteSwiftPackageReference "SwiftECC" */;
+			productName = SwiftECC;
 		};
 /* End XCSwiftPackageProductDependency section */
 
