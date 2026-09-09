@@ -81,17 +81,30 @@ struct ChartSelectionRow: View {
     /// mmol/L is written to one decimal even when it is a whole number — 8 reads as 8.0, the
     /// way the rest of the app writes it — and both units go through a formatter so the
     /// decimal separator follows the locale rather than `Decimal.description`'s hard dot.
-    private static let glucoseFormatter: (GlucoseUnits) -> NumberFormatter = { units in
+    ///
+    /// Cached like every other formatter in `Formatters.swift`: the row is rebuilt on every
+    /// scrub step and `ViewThatFits` evaluates each candidate, so building one per call would
+    /// allocate several `NumberFormatter`s a frame while the finger is down.
+    private static let mgdLFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.locale = .current
-        formatter.minimumFractionDigits = units == .mgdL ? 0 : 1
-        formatter.maximumFractionDigits = units == .mgdL ? 0 : 1
+        formatter.maximumFractionDigits = 0
         return formatter
-    }
+    }()
+
+    private static let mmolLFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = .current
+        formatter.minimumFractionDigits = 1
+        formatter.maximumFractionDigits = 1
+        return formatter
+    }()
 
     private func glucoseString(_ value: Decimal) -> String {
-        Self.glucoseFormatter(units).string(from: value as NSDecimalNumber) ?? value.description
+        let formatter = units == .mgdL ? Self.mgdLFormatter : Self.mmolLFormatter
+        return formatter.string(from: value as NSDecimalNumber) ?? value.description
     }
 
     private var pointMarkColor: Color {
