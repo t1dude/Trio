@@ -166,6 +166,13 @@ final class BaseTrioAlertManager: TrioAlertManager, Injectable {
         // user explicitly opted out of audio on this alarm.
         guard let soundName = alert.sound?.filename else { return }
         Task { @MainActor in
+            // When the app holds the real Critical Alerts entitlement and the
+            // user has authorized it, iOS itself delivers `.criticalSoundNamed`
+            // through silent switch / DnD / Focus — our own fallback would
+            // just double the sound on top of that, so skip it.
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            guard settings.criticalAlertSetting != .enabled else { return }
+
             // AlarmKit pierces silent/Focus and survives app suspension.
             if alarmScheduler == nil { alarmScheduler = CriticalAlertAlarmScheduler() }
             let scheduled = alarmScheduler?.scheduleAlarm(for: alert) { [weak self] in
