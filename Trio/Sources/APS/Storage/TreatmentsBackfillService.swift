@@ -10,18 +10,20 @@ struct TreatmentsBackfillSummary {
     let tempBasalsImported: Int
     let glucoseImported: Int
     let daysSynthesized: Int
+    /// Start of each 24-hour window whose import failed.
     let daysSkipped: [Date]
-    /// Days that were fetched successfully but had zero bolus/temp-basal treatments found in Nightscout.
-    /// A high count here means Nightscout itself doesn't have insulin dosing history that far back
-    /// (common if AID looping/uploading only started recently), not a bug in the import — those days'
-    /// synthesized TDD will be flat (scheduled-basal only) since there's nothing else to add.
+    /// Windows that were fetched successfully but had no bolus/temp-basal data, neither in Nightscout
+    /// nor locally. A high count means Nightscout itself doesn't have insulin dosing history that far
+    /// back (common if uploading only started recently), not a bug in the import — those windows'
+    /// synthesized TDD is scheduled basal only, since there's nothing else to add.
     let daysWithNoTreatmentDataInNightscout: Int
 }
 
 protocol TreatmentsBackfillService {
-    /// Fetches `days` of carb/bolus/temp-basal history from Nightscout (ending the day before today),
-    /// imports it into Core Data, and synthesizes dense `TDDStored` rows for each imported day so that
-    /// Dynamic ISF's 7-day data requirement can be satisfied without waiting for real loop cycles to accrue.
+    /// Fetches `days` × 24 hours of carb/bolus/temp-basal/glucose history from Nightscout, ending at the
+    /// moment of the call, imports it into Core Data, and synthesizes dense `TDDStored` rows for each
+    /// imported 24-hour window so Dynamic ISF's 7-day data requirement can be satisfied without waiting
+    /// for real loop cycles to accrue.
     func backfill(days: Int, progress: @escaping (String) -> Void) async throws -> TreatmentsBackfillSummary
 }
 
@@ -31,7 +33,7 @@ enum TreatmentsBackfillError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noPumpConfigured:
-            return "Pair a pump before backfilling treatments."
+            return String(localized: "Pair a pump before backfilling treatments.")
         }
     }
 }
@@ -41,7 +43,6 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
     @Injected() private var tddStorage: TDDStorage!
     @Injected() private var apsManager: APSManager!
     @Injected() private var storage: FileStorage!
-    @Injected() private var glucoseStorage: GlucoseStorage!
 
     private let makeContext: () -> NSManagedObjectContext
 
@@ -50,29 +51,28 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
         injectServices(resolver)
     }
 
-    /// One calendar day's worth of fetched Nightscout data, kept in memory so TDD synthesis
-    /// doesn't need to round-trip through Core Data.
-    private struct DayFetch {
-        let dayStart: Date
-        let dayEnd: Date
-        let carbs: [CarbsEntry]
-        let insulinTreatments: [NightscoutTreatment]
-        let tempBasalTreatments: [NightscoutTreatment]
-    }
+    static let maxDays = 90
+    static let windowLength: TimeInterval = 24 * 60 * 60
+    /// Temp basals and suspensions started this long before a window can still be running inside it.
+    static let lookback: TimeInterval = 6 * 60 * 60
+    static let tddRowSpacing: TimeInterval = 5 * 60
+    /// CGM algorithmic floor, as `GlucoseStorage` clamps it
+    static let minimumGlucose = 39
+    static let importNote = "Imported from Nightscout"
+    private static let windowAnchorPrefix = "tdd-backfill-window-anchor-"
 
     func backfill(days: Int, progress: @escaping (String) -> Void) async throws -> TreatmentsBackfillSummary {
         guard let pumpManager = apsManager.pumpManager else {
             throw TreatmentsBackfillError.noPumpConfigured
         }
 
-        let clampedDays = min(max(days, 1), 90)
         let basalProfile = await storage
             .retrieveAsync(OpenAPS.Settings.basalProfile, as: [BasalProfileEntry].self) ??
             [BasalProfileEntry](from: OpenAPS.defaults(for: OpenAPS.Settings.basalProfile)) ??
             []
 
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        // One fixed "now" for the whole run, so the newest window ends exactly when backfill was started
+        let windows = Self.windows(endingAt: Date(), days: days)
 
         var carbsImported = 0
         var bolusesImported = 0
@@ -80,53 +80,61 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
         var glucoseImported = 0
         var daysSynthesized = 0
         var daysSkipped: [Date] = []
-        var daysWithNoTreatmentDataInNightscout = 0
+        var daysWithNoTreatmentData = 0
 
-        // Oldest day first: dayIndex = clampedDays means the oldest day, dayIndex = 1 means yesterday.
-        for dayIndex in stride(from: clampedDays, through: 1, by: -1) {
-            guard let dayStart = calendar.date(byAdding: .day, value: -dayIndex, to: today),
-                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)
-            else { continue }
-
-            let dayNumber = clampedDays - dayIndex + 1
-            progress("Fetching day \(dayNumber) of \(clampedDays)…")
+        // Oldest first: each window's TDD reads temp basals the previous window imported.
+        for (index, window) in windows.enumerated() {
+            let label = "\(index + 1) of \(windows.count)"
+            progress(String(localized: "Fetching day \(label)…"))
 
             do {
-                let dayFetch = try await fetchDay(dayStart: dayStart, dayEnd: dayEnd)
+                let documents = try await nightscoutManager.fetchTreatmentsForBackfill(
+                    sinceDate: window.start.addingTimeInterval(-Self.lookback),
+                    untilDate: window.end
+                )
+                let batch = NightscoutBackfill.normalize(documents) { date in
+                    findBasalRateForOffset(for: Self.minutesOfDay(date), in: basalProfile)
+                }
+                let imported = try await persist(batch, in: window)
+                carbsImported += imported.carbs
+                bolusesImported += imported.boluses
+                tempBasalsImported += imported.tempBasals
 
-                let carbCount = try await persistCarbs(dayFetch)
-                let (bolusCount, tempBasalCount) = try await persistPumpEvents(dayFetch)
-
-                carbsImported += carbCount
-                bolusesImported += bolusCount
-                tempBasalsImported += tempBasalCount
-                if dayFetch.insulinTreatments.isEmpty, dayFetch.tempBasalTreatments.isEmpty {
-                    daysWithNoTreatmentDataInNightscout += 1
+                progress(String(localized: "Calculating TDD for day \(label)…"))
+                let history = try await localPumpHistory(
+                    from: window.start.addingTimeInterval(-Self.lookback),
+                    to: window.end
+                )
+                let windowHistory = Self.pumpHistory(for: window, from: history, basalProfile: basalProfile)
+                if !windowHistory
+                    .contains(where: { $0.type == .bolus || ($0.type == .tempBasal && $0.isScheduledBasal != true) })
+                {
+                    daysWithNoTreatmentData += 1
                 }
 
-                progress("Synthesizing TDD for \(dayFormatter.string(from: dayStart))…")
-                try await synthesizeTDD(
-                    for: dayFetch,
+                let tddResult = try await tddStorage.calculateTDD(
                     pumpManager: pumpManager,
-                    basalProfile: basalProfile
+                    pumpHistory: windowHistory,
+                    basalProfile: basalProfile,
+                    now: window.end
                 )
+                try await writeSyntheticTDDRows(for: window, result: tddResult)
                 daysSynthesized += 1
             } catch {
-                warning(.nightscout, "Treatments backfill failed for day \(dayStart): \(error)")
-                daysSkipped.append(dayStart)
-                progress("Day \(dayNumber) of \(clampedDays) failed, continuing…")
+                warning(.nightscout, "Treatments backfill failed for \(window)", error: error)
+                daysSkipped.append(window.start)
+                progress(String(localized: "Day \(label) failed, continuing…"))
             }
 
-            // Glucose is independent of TDD synthesis, so a glucose-fetch failure shouldn't skip the
-            // rest of this day's (already-succeeded) carb/insulin/temp-basal import above.
+            // Glucose is independent of TDD synthesis, so a glucose failure doesn't skip the window above.
             do {
-                let glucose = try await nightscoutManager.fetchGlucoseForBackfill(sinceDate: dayStart, untilDate: dayEnd)
-                if glucose.isNotEmpty {
-                    try await glucoseStorage.storeGlucose(glucose)
-                    glucoseImported += glucose.count
-                }
+                let documents = try await nightscoutManager.fetchGlucoseForBackfill(
+                    sinceDate: window.start,
+                    untilDate: window.end
+                )
+                glucoseImported += try await persistGlucose(NightscoutBackfill.glucose(from: documents), in: window)
             } catch {
-                warning(.nightscout, "Glucose backfill failed for day \(dayStart): \(error)")
+                warning(.nightscout, "Glucose backfill failed for \(window)", error: error)
             }
         }
 
@@ -137,271 +145,464 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
             glucoseImported: glucoseImported,
             daysSynthesized: daysSynthesized,
             daysSkipped: daysSkipped,
-            daysWithNoTreatmentDataInNightscout: daysWithNoTreatmentDataInNightscout
+            daysWithNoTreatmentDataInNightscout: daysWithNoTreatmentData
         )
     }
 
-    private let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        return formatter
-    }()
+    // MARK: - Windows
 
-    // MARK: - Fetch
+    /// Consecutive 24-hour windows, oldest first, the newest ending at `now`.
+    ///
+    /// Rolling windows rather than calendar days: the newest data is the most valuable (it feeds IOB,
+    /// COB and the 2-hour TDD average right away), and each window matches what a real loop cycle
+    /// stores — the TDD of the 24 hours before it.
+    static func windows(endingAt now: Date, days: Int) -> [DateInterval] {
+        let count = min(max(days, 1), maxDays)
+        return (0 ..< count).reversed().map { offset in
+            let end = now.addingTimeInterval(-Double(offset) * windowLength)
+            return DateInterval(start: end.addingTimeInterval(-windowLength), end: end)
+        }
+    }
 
-    private func fetchDay(dayStart: Date, dayEnd: Date) async throws -> DayFetch {
-        async let carbs = nightscoutManager.fetchCarbsForBackfill(sinceDate: dayStart, untilDate: dayEnd)
-        async let insulin = nightscoutManager.fetchInsulinForBackfill(sinceDate: dayStart, untilDate: dayEnd)
-        async let tempBasals = nightscoutManager.fetchTempBasalsForBackfill(sinceDate: dayStart, untilDate: dayEnd)
+    private static func minutesOfDay(_ date: Date) -> Int {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    }
 
-        return try await DayFetch(
-            dayStart: dayStart,
-            dayEnd: dayEnd,
-            carbs: carbs,
-            insulinTreatments: insulin,
-            tempBasalTreatments: tempBasals
-        )
+    // MARK: - Persist treatments
+
+    private struct ImportCounts {
+        var boluses = 0
+        var tempBasals = 0
+        var carbs = 0
+    }
+
+    /// Imports a window's treatments, skipping any already stored locally — from real pump use, or this
+    /// same Nightscout data imported by an earlier window or run.
+    ///
+    /// Temp basals and suspensions from the lookback are imported too, so a temp running into the
+    /// oldest window is known; boluses and carbs only count inside the window.
+    private func persist(_ batch: NightscoutBackfill.Batch, in window: DateInterval) async throws -> ImportCounts {
+        let lookbackStart = window.start.addingTimeInterval(-Self.lookback)
+        let boluses = batch.boluses.filter { $0.date >= window.start && $0.date < window.end }
+        let carbs = batch.carbs.filter { $0.date >= window.start && $0.date < window.end }
+        let tempBasals = batch.tempBasals.filter { $0.start >= lookbackStart && $0.start < window.end }
+        let suspensions = batch.suspensions.filter { $0.date >= lookbackStart && $0.date < window.end }
+
+        let context = makeContext()
+        context.name = "TreatmentsBackfillService.persist"
+
+        return try await context.perform {
+            var counts = ImportCounts()
+            let margin: TimeInterval = 120
+
+            let pumpRequest: NSFetchRequest<PumpEventStored> = PumpEventStored.fetchRequest()
+            pumpRequest.predicate = NSPredicate(
+                format: "timestamp >= %@ AND timestamp < %@",
+                lookbackStart.addingTimeInterval(-margin) as NSDate,
+                window.end.addingTimeInterval(margin) as NSDate
+            )
+            pumpRequest.relationshipKeyPathsForPrefetching = ["bolus", "tempBasal"]
+            var existing = try context.fetch(pumpRequest).compactMap(LocalEvent.init)
+
+            for bolus in boluses {
+                let id = "ns-\(bolus.id)"
+                guard !existing.contains(where: { $0.isDuplicate(ofBolus: bolus, id: id) }) else { continue }
+
+                let pumpEvent = Self.makePumpEvent(id: id, type: .bolus, timestamp: bolus.date, in: context)
+                let stored = BolusStored(context: context)
+                stored.amount = NSDecimalNumber(decimal: bolus.amount)
+                stored.programmedAmount = NSDecimalNumber(decimal: bolus.amount)
+                // History, statistics and the NS upload mapping read the kind from these flags;
+                // the event type stays "Bolus", which is all getPumpHistory() feeds to IOB and TDD.
+                stored.isSMB = bolus.kind == .smb
+                stored.isExternal = bolus.kind == .external
+                stored.pumpEvent = pumpEvent
+
+                existing.append(LocalEvent(id: id, kind: .bolus, date: bolus.date, amount: bolus.amount))
+                counts.boluses += 1
+            }
+
+            for tempBasal in tempBasals {
+                let id = "ns-\(tempBasal.id)"
+                guard !existing.contains(where: { $0.isDuplicate(ofTempBasal: tempBasal, id: id) }) else { continue }
+
+                let pumpEvent = Self.makePumpEvent(id: id, type: .tempBasal, timestamp: tempBasal.start, in: context)
+                let stored = TempBasalStored(context: context)
+                stored.rate = NSDecimalNumber(decimal: tempBasal.rate)
+                stored.duration = Int16(clamping: Int(tempBasal.durationMinutes.rounded()))
+                stored.tempType = TempType.absolute.rawValue
+                stored.startDate = tempBasal.start
+                stored.endDate = tempBasal.end
+                stored.isScheduledBasal = false
+                stored.pumpEvent = pumpEvent
+
+                existing.append(LocalEvent(id: id, kind: .tempBasal, date: tempBasal.start, amount: tempBasal.rate))
+                if tempBasal.start >= window.start { counts.tempBasals += 1 }
+            }
+
+            for suspension in suspensions {
+                let id = "ns-\(suspension.id)"
+                let kind: LocalEvent.Kind = suspension.isSuspend ? .suspend : .resume
+                guard !existing.contains(where: {
+                    $0.id == id || ($0.kind == kind && abs($0.date.timeIntervalSince(suspension.date)) < 30)
+                }) else { continue }
+
+                _ = Self.makePumpEvent(
+                    id: id,
+                    type: suspension.isSuspend ? .pumpSuspend : .pumpResume,
+                    timestamp: suspension.date,
+                    in: context
+                )
+                existing.append(LocalEvent(id: id, kind: kind, date: suspension.date, amount: nil))
+            }
+
+            if carbs.isNotEmpty {
+                counts.carbs = try Self.persistCarbs(carbs, in: window, context: context)
+            }
+
+            guard context.hasChanges else { return counts }
+            try context.save()
+            return counts
+        }
+    }
+
+    private static func makePumpEvent(
+        id: String,
+        type: PumpEventStored.EventType,
+        timestamp: Date,
+        in context: NSManagedObjectContext
+    ) -> PumpEventStored {
+        let pumpEvent = PumpEventStored(context: context)
+        pumpEvent.id = id
+        pumpEvent.syncIdentifier = id
+        // final: never purged as a stale pending pump report
+        pumpEvent.isMutable = false
+        pumpEvent.timestamp = timestamp
+        pumpEvent.type = type.rawValue
+        pumpEvent.note = importNote
+        // already in Nightscout, and must not be written to Apple Health or Tidepool as new doses
+        pumpEvent.isUploadedToNS = true
+        pumpEvent.isUploadedToHealth = true
+        pumpEvent.isUploadedToTidepool = true
+        return pumpEvent
+    }
+
+    /// A stored pump event, reduced to what deduplication compares.
+    private struct LocalEvent {
+        enum Kind { case bolus, tempBasal, suspend, resume }
+
+        let id: String?
+        let kind: Kind
+        let date: Date
+        let amount: Decimal?
+
+        init(id: String?, kind: Kind, date: Date, amount: Decimal?) {
+            self.id = id
+            self.kind = kind
+            self.date = date
+            self.amount = amount
+        }
+
+        init?(_ event: PumpEventStored) {
+            guard let timestamp = event.timestamp else { return nil }
+            switch event.type {
+            case PumpEventStored.EventType.bolus.rawValue,
+                 PumpEventStored.EventType.isExternal.rawValue,
+                 PumpEventStored.EventType.smb.rawValue:
+                self.init(id: event.id, kind: .bolus, date: timestamp, amount: event.bolus?.amount as Decimal?)
+            case PumpEventStored.EventType.tempBasal.rawValue:
+                // scheduled-basal reports aren't temp basals; an imported temp at the same time is still new
+                guard event.tempBasal?.isScheduledBasal != true else { return nil }
+                self.init(id: event.id, kind: .tempBasal, date: timestamp, amount: event.tempBasal?.rate as Decimal?)
+            case PumpEventStored.EventType.pumpSuspend.rawValue:
+                self.init(id: event.id, kind: .suspend, date: timestamp, amount: nil)
+            case PumpEventStored.EventType.pumpResume.rawValue:
+                self.init(id: event.id, kind: .resume, date: timestamp, amount: nil)
+            default:
+                return nil
+            }
+        }
+
+        /// The same dose uploaded by this or another Trio, possibly with a slightly different timestamp
+        /// (sub-second precision) or a finalized amount that differs from the programmed one.
+        func isDuplicate(ofBolus bolus: NightscoutBackfill.Bolus, id: String) -> Bool {
+            if self.id == id { return true }
+            guard kind == .bolus else { return false }
+            let seconds = abs(date.timeIntervalSince(bolus.date))
+            if seconds < 5 { return true }
+            guard seconds < 60, let amount else { return false }
+            return abs(amount - bolus.amount) < 0.05
+        }
+
+        func isDuplicate(ofTempBasal tempBasal: NightscoutBackfill.TempBasal, id: String) -> Bool {
+            if self.id == id { return true }
+            return kind == .tempBasal && abs(date.timeIntervalSince(tempBasal.start)) < 30
+        }
     }
 
     // MARK: - Persist carbs
 
-    private func persistCarbs(_ dayFetch: DayFetch) async throws -> Int {
-        guard dayFetch.carbs.isNotEmpty else { return 0 }
+    private static func persistCarbs(
+        _ carbs: [NightscoutBackfill.Carb],
+        in window: DateInterval,
+        context: NSManagedObjectContext
+    ) throws -> Int {
+        let margin: TimeInterval = 120
+        let request: NSFetchRequest<CarbEntryStored> = CarbEntryStored.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "date >= %@ AND date < %@",
+            window.start.addingTimeInterval(-margin) as NSDate,
+            window.end.addingTimeInterval(margin) as NSDate
+        )
+        var existing: [(id: UUID?, date: Date, carbs: Double)] = try context.fetch(request).compactMap { entry in
+            entry.date.map { (entry.id, $0, entry.carbs) }
+        }
+
+        var inserted = 0
+        for carb in carbs {
+            let clientUUID = carb.clientID.flatMap(UUID.init(uuidString:))
+            let amount = Double(truncating: NSDecimalNumber(decimal: carb.carbs))
+            let isDuplicate = existing.contains { entry in
+                if let clientUUID, entry.id == clientUUID { return true }
+                let seconds = abs(entry.date.timeIntervalSince(carb.date))
+                return seconds < 5 || (seconds < 60 && abs(entry.carbs - amount) < 0.5)
+            }
+            guard !isDuplicate else { continue }
+
+            let entry = CarbEntryStored(context: context)
+            // keeping Trio's own id lets a later deletion here remove the Nightscout document too
+            entry.id = clientUUID ?? UUID()
+            entry.date = carb.date
+            entry.carbs = amount
+            entry.fat = Double(truncating: NSDecimalNumber(decimal: carb.fat ?? 0))
+            entry.protein = Double(truncating: NSDecimalNumber(decimal: carb.protein ?? 0))
+            entry.note = carb.note
+            entry.isFPU = carb.isFPU
+            entry.fpuID = carb.fpuID.flatMap(UUID.init(uuidString:))
+            entry.isUploadedToNS = true
+            entry.isUploadedToHealth = true
+            entry.isUploadedToTidepool = true
+
+            existing.append((entry.id, carb.date, amount))
+            inserted += 1
+        }
+        return inserted
+    }
+
+    // MARK: - Persist glucose
+
+    /// Stores readings directly rather than through `GlucoseStorage`, which marks them for upload:
+    /// they came from Nightscout and must not go back there, nor to Apple Health or Tidepool.
+    private func persistGlucose(_ readings: [NightscoutBackfill.Glucose], in window: DateInterval) async throws -> Int {
+        guard readings.isNotEmpty else { return 0 }
 
         let context = makeContext()
-        context.name = "TreatmentsBackfillService.persistCarbs"
+        context.name = "TreatmentsBackfillService.persistGlucose"
 
         return try await context.perform {
-            let fetchRequest: NSFetchRequest<CarbEntryStored> = CarbEntryStored.fetchRequest()
-            fetchRequest.predicate = NSPredicate(
+            let request = NSFetchRequest<NSDictionary>(entityName: "GlucoseStored")
+            request.resultType = .dictionaryResultType
+            request.propertiesToFetch = ["date"]
+            request.predicate = NSPredicate(
                 format: "date >= %@ AND date < %@",
-                dayFetch.dayStart as NSDate,
-                dayFetch.dayEnd as NSDate
+                window.start.addingTimeInterval(-60) as NSDate,
+                window.end.addingTimeInterval(60) as NSDate
             )
-            let existing = try context.fetch(fetchRequest)
-            let existingTimestamps = Set(existing.compactMap(\.date))
+            var existingDates = try context.fetch(request).compactMap { $0["date"] as? Date }.sorted()
 
-            var insertedCount = 0
-            for entry in dayFetch.carbs {
-                let entryDate = entry.actualDate ?? entry.createdAt
-                guard !existingTimestamps.contains(entryDate) else { continue }
+            var inserted = 0
+            for reading in readings where reading.date >= window.start && reading.date < window.end {
+                // the same reading from another uploader or the local CGM; 20 s still separates 1-minute CGMs
+                guard !Self.hasDate(near: reading.date, within: 20, in: existingDates) else { continue }
 
-                let newItem = CarbEntryStored(context: context)
-                newItem.date = entryDate
-                newItem.carbs = Double(truncating: NSDecimalNumber(decimal: entry.carbs))
-                newItem.fat = Double(truncating: NSDecimalNumber(decimal: entry.fat ?? 0))
-                newItem.protein = Double(truncating: NSDecimalNumber(decimal: entry.protein ?? 0))
-                newItem.note = entry.note
-                newItem.id = UUID()
-                newItem.isFPU = false
-                newItem.isUploadedToNS = true
-                newItem.isUploadedToHealth = true
-                newItem.isUploadedToTidepool = true
-                insertedCount += 1
+                let entry = GlucoseStored(context: context)
+                entry.id = UUID()
+                entry.glucose = Int16(clamping: max(reading.value, Self.minimumGlucose))
+                entry.date = reading.date
+                entry.direction = reading.direction.flatMap { BloodGlucose.Direction(from: $0) }?.rawValue
+                entry.isManual = false
+                entry.isUploadedToNS = true
+                entry.isUploadedToHealth = true
+                entry.isUploadedToTidepool = true
+
+                let insertAt = existingDates.firstIndex { $0 > reading.date } ?? existingDates.endIndex
+                existingDates.insert(reading.date, at: insertAt)
+                inserted += 1
             }
 
-            guard context.hasChanges else { return insertedCount }
+            guard context.hasChanges else { return inserted }
             try context.save()
-            return insertedCount
+            return inserted
         }
     }
 
-    // MARK: - Persist boluses & temp basals
-
-    private func persistPumpEvents(_ dayFetch: DayFetch) async throws -> (boluses: Int, tempBasals: Int) {
-        guard dayFetch.insulinTreatments.isNotEmpty || dayFetch.tempBasalTreatments.isNotEmpty else { return (0, 0) }
-
-        let context = makeContext()
-        context.name = "TreatmentsBackfillService.persistPumpEvents"
-
-        return try await context.perform {
-            let candidateIds = (dayFetch.insulinTreatments + dayFetch.tempBasalTreatments)
-                .map { Self.stablePumpEventID(for: $0) }
-
-            let idFetchRequest: NSFetchRequest<PumpEventStored> = PumpEventStored.fetchRequest()
-            idFetchRequest.predicate = NSPredicate(format: "id IN %@", candidateIds)
-            let existingIDs = Set(try context.fetch(idFetchRequest).compactMap(\.id))
-
-            // Nightscout treatments here don't reliably carry the app's own `enteredBy` tag (this server
-            // doesn't return matches for that filter at all when combined with a day-bounded date range —
-            // see the comment in NightscoutAPI.fetchInsulin), so a treatment already tracked locally
-            // (from real device usage, or a prior backfill run whose id happened to differ) could otherwise
-            // be re-imported as a second row and double-count insulin. Cross-check by exact timestamp too.
-            let dayFetchRequest: NSFetchRequest<PumpEventStored> = PumpEventStored.fetchRequest()
-            dayFetchRequest.predicate = NSPredicate(
-                format: "timestamp >= %@ AND timestamp < %@",
-                dayFetch.dayStart as NSDate,
-                dayFetch.dayEnd as NSDate
-            )
-            let existingTimestamps = Set(try context.fetch(dayFetchRequest).compactMap(\.timestamp))
-
-            var bolusCount = 0
-            for treatment in dayFetch.insulinTreatments {
-                guard let insulin = treatment.insulin, let createdAt = treatment.createdAt else { continue }
-                let stableID = Self.stablePumpEventID(for: treatment)
-                guard !existingIDs.contains(stableID), !existingTimestamps.contains(createdAt) else { continue }
-
-                let isExternal = treatment.eventType == .isExternal
-                let isSMB = treatment.eventType == .smb
-
-                let pumpEvent = PumpEventStored(context: context)
-                pumpEvent.id = stableID
-                pumpEvent.timestamp = createdAt
-                // Genuinely NS-tagged "External Insulin"/"SMB" treatments keep their real type; every other
-                // insulin-bearing eventType (Bolus/Correction Bolus/Meal Bolus/…) is a normal pump delivery.
-                // isSMB/isExternal (not `type`) are what the History and Statistics views key off of to label
-                // a bolus "Manual" vs "SMB" vs "External" — both must be set correctly, not just `type`.
-                if isExternal {
-                    pumpEvent.type = PumpEventStored.EventType.isExternal.rawValue
-                } else if isSMB {
-                    pumpEvent.type = PumpEventStored.EventType.smb.rawValue
-                } else {
-                    pumpEvent.type = PumpEventStored.EventType.bolus.rawValue
-                }
-                pumpEvent.note = "Imported from Nightscout"
-                pumpEvent.isUploadedToNS = true
-                pumpEvent.isUploadedToHealth = true
-                pumpEvent.isUploadedToTidepool = true
-
-                let bolus = BolusStored(context: context)
-                bolus.amount = NSDecimalNumber(decimal: insulin)
-                bolus.isExternal = isExternal
-                bolus.isSMB = isSMB
-                bolus.pumpEvent = pumpEvent
-
-                bolusCount += 1
-            }
-
-            var tempBasalCount = 0
-            for treatment in dayFetch.tempBasalTreatments {
-                guard let createdAt = treatment.createdAt,
-                      let rate = treatment.absolute ?? treatment.rate,
-                      let durationMin = treatment.duration
-                else { continue }
-                let stableID = Self.stablePumpEventID(for: treatment)
-                guard !existingIDs.contains(stableID), !existingTimestamps.contains(createdAt) else { continue }
-
-                let pumpEvent = PumpEventStored(context: context)
-                pumpEvent.id = stableID
-                pumpEvent.timestamp = createdAt
-                // Native `.tempBasal` (not the NS-wire `.nsTempBasal`), so this row is treated identically
-                // to a pump-sourced temp basal by getPumpHistory()/IOB/TDD calculations going forward.
-                pumpEvent.type = PumpEventStored.EventType.tempBasal.rawValue
-                pumpEvent.note = "Imported from Nightscout"
-                pumpEvent.isUploadedToNS = true
-                pumpEvent.isUploadedToHealth = true
-                pumpEvent.isUploadedToTidepool = true
-
-                let tempBasal = TempBasalStored(context: context)
-                tempBasal.rate = NSDecimalNumber(decimal: rate)
-                tempBasal.duration = Int16(clamping: durationMin)
-                tempBasal.tempType = TempType.absolute.rawValue
-                tempBasal.pumpEvent = pumpEvent
-
-                tempBasalCount += 1
-            }
-
-            guard context.hasChanges else { return (bolusCount, tempBasalCount) }
-            try context.save()
-            return (bolusCount, tempBasalCount)
+    /// `dates` must be sorted ascending.
+    static func hasDate(near date: Date, within tolerance: TimeInterval, in dates: [Date]) -> Bool {
+        var low = 0
+        var high = dates.count
+        while low < high {
+            let mid = (low + high) / 2
+            if dates[mid] < date.addingTimeInterval(-tolerance) { low = mid + 1 } else { high = mid }
         }
-    }
-
-    /// Nightscout treatments carry a client-generated `id` (used elsewhere in this app for delete-by-id
-    /// calls), which is stable across repeated fetches of the same document. Falls back to a deterministic
-    /// id derived from timestamp+eventType for the rare treatment that lacks one, so dedup still degrades
-    /// gracefully instead of crashing or duplicating on every rerun.
-    private static let dayAnchorPrefix = "tdd-backfill-day-anchor-"
-
-    private static func stablePumpEventID(for treatment: NightscoutTreatment) -> String {
-        if let id = treatment.id, id.isNotEmpty {
-            return "ns-\(id)"
-        }
-        let timestamp = treatment.createdAt?.timeIntervalSince1970 ?? 0
-        return "ns-\(treatment.eventType.rawValue)-\(timestamp)"
+        return low < dates.count && dates[low] <= date.addingTimeInterval(tolerance)
     }
 
     // MARK: - TDD synthesis
 
-    private func synthesizeTDD(
-        for dayFetch: DayFetch,
-        pumpManager: any PumpManagerUI,
-        basalProfile: [BasalProfileEntry]
-    ) async throws {
-        var pumpHistory: [PumpHistoryEvent] = []
+    /// Pump history between two dates, mapped like `PumpHistoryStorage.getPumpHistory()` (newest first).
+    private func localPumpHistory(from start: Date, to end: Date) async throws -> [PumpHistoryEvent] {
+        let context = makeContext()
+        context.name = "TreatmentsBackfillService.localPumpHistory"
 
-        for treatment in dayFetch.insulinTreatments {
-            guard let insulin = treatment.insulin, let createdAt = treatment.createdAt else { continue }
-            pumpHistory.append(PumpHistoryEvent(
-                id: Self.stablePumpEventID(for: treatment),
-                type: .bolus,
-                timestamp: createdAt,
-                amount: insulin
-            ))
+        return try await context.perform {
+            let request: NSFetchRequest<PumpEventStored> = PumpEventStored.fetchRequest()
+            request.predicate = NSPredicate(format: "timestamp >= %@ AND timestamp < %@", start as NSDate, end as NSDate)
+            request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+            request.relationshipKeyPathsForPrefetching = ["bolus", "tempBasal"]
+
+            return try context.fetch(request).compactMap { event -> PumpHistoryEvent? in
+                guard let timestamp = event.timestamp else { return nil }
+                let id = event.id ?? UUID().uuidString
+                switch event.type {
+                case PumpEventStored.EventType.bolus.rawValue,
+                     PumpEventStored.EventType.isExternal.rawValue,
+                     PumpEventStored.EventType.smb.rawValue:
+                    return PumpHistoryEvent(id: id, type: .bolus, timestamp: timestamp, amount: event.bolus?.amount as Decimal?)
+                case PumpEventStored.EventType.tempBasal.rawValue:
+                    return PumpHistoryEvent(
+                        id: id,
+                        type: .tempBasal,
+                        timestamp: timestamp,
+                        amount: event.tempBasal?.rate as Decimal?,
+                        duration: Int(event.tempBasal?.duration ?? 0),
+                        isScheduledBasal: event.tempBasal?.isScheduledBasal ?? false,
+                        deliveredUnits: event.tempBasal?.deliveredUnits as Decimal?
+                    )
+                case PumpEventStored.EventType.pumpSuspend.rawValue:
+                    return PumpHistoryEvent(id: id, type: .pumpSuspend, timestamp: timestamp)
+                case PumpEventStored.EventType.pumpResume.rawValue:
+                    return PumpHistoryEvent(id: id, type: .pumpResume, timestamp: timestamp)
+                default:
+                    return nil
+                }
+            }
         }
-
-        for treatment in dayFetch.tempBasalTreatments {
-            guard let createdAt = treatment.createdAt,
-                  let rate = treatment.absolute ?? treatment.rate,
-                  let durationMin = treatment.duration
-            else { continue }
-            pumpHistory.append(PumpHistoryEvent(
-                id: Self.stablePumpEventID(for: treatment),
-                type: .tempBasal,
-                timestamp: createdAt,
-                amount: rate,
-                duration: durationMin
-            ))
-        }
-
-        // `calculateTDD`'s internal `findBasalGaps` anchors its day-boundary math to the *first* temp-basal
-        // event's timestamp; when it finds none at all, it falls back to `Calendar.current.startOfDay(for:
-        // Date())` — i.e. *today*, not this historical day. On a day with zero fetched temp basal treatments
-        // (e.g. no oref deviations that day) that fallback would silently compute scheduled-basal insulin
-        // against today's elapsed hours instead of this historical day. A single 1-minute, zero-rate
-        // placeholder anchors the day correctly (contributes ~0 insulin itself) without touching that
-        // private, unmodified function.
-        if pumpHistory.first(where: { $0.type == .tempBasal }) == nil {
-            pumpHistory.append(PumpHistoryEvent(
-                id: "\(Self.dayAnchorPrefix)\(dayFetch.dayStart.timeIntervalSince1970)",
-                type: .tempBasal,
-                timestamp: dayFetch.dayStart,
-                amount: 0,
-                duration: 1
-            ))
-        }
-
-        // calculateTDD sorts internally assuming a descending feed (mirrors pumpHistoryStorage.getPumpHistory()).
-        pumpHistory.sort { $0.timestamp > $1.timestamp }
-
-        let tddResult = try await tddStorage.calculateTDD(
-            pumpManager: pumpManager,
-            pumpHistory: pumpHistory,
-            basalProfile: basalProfile
-        )
-
-        try await writeSyntheticTDDRows(for: dayFetch.dayStart, dayEnd: dayFetch.dayEnd, result: tddResult)
     }
 
-    /// Writes ~288 rows (5-minute spacing) for the day so `hasSufficientTDD()`'s density check
-    /// (≥75% of 288 rows/day over the trailing 7 days) is satisfied by real loop-cadence-shaped data,
-    /// without touching that gate's logic at all. Deletes any previously-synthesized rows for this
-    /// exact day first so rerunning the backfill can't double-count in the weighted-average feed that
-    /// powers Dynamic ISF's live formula.
-    private func writeSyntheticTDDRows(for dayStart: Date, dayEnd: Date, result: TDDResult) async throws {
+    /// Clips pump history to one window, so `calculateTDD(…, now: window.end)` counts exactly the insulin
+    /// delivered inside it.
+    ///
+    /// - A temp basal running into the window from before it is cut to start at the window start.
+    /// - A temp basal running past the window end is cut there.
+    /// - Clipped temps drop `deliveredUnits`, which covers the whole temp, so their insulin comes from
+    ///   rate × time inside the window instead.
+    /// - A zero-width scheduled-basal point at the window start makes scheduled-basal inference cover
+    ///   the window from its first minute rather than from its first event.
+    /// - A pump that was suspended when the window opened gets a suspend at the window start.
+    ///
+    /// - Returns: newest first, like `getPumpHistory()`
+    static func pumpHistory(
+        for window: DateInterval,
+        from events: [PumpHistoryEvent],
+        basalProfile: [BasalProfileEntry]
+    ) -> [PumpHistoryEvent] {
+        var result: [PumpHistoryEvent] = []
+        let ascending = events.sorted { $0.timestamp < $1.timestamp }
+        let isInside: (Date) -> Bool = { $0 >= window.start && $0 < window.end }
+
+        // boluses and scheduled-basal reports are instants
+        result += ascending.filter { event in
+            switch event.type {
+            case .bolus: return isInside(event.timestamp)
+            case .tempBasal: return event.isScheduledBasal == true && isInside(event.timestamp)
+            default: return false
+            }
+        }
+
+        let temps = ascending.filter { $0.type == .tempBasal && $0.isScheduledBasal != true }
+        for (index, temp) in temps.enumerated() {
+            guard temp.timestamp < window.end else { break }
+            let minutes = Double(temp.duration ?? 0)
+            var end = temp.timestamp.addingTimeInterval(minutes * 60)
+            // a newer temp basal supersedes this one
+            if index + 1 < temps.count { end = min(end, temps[index + 1].timestamp) }
+
+            if temp.timestamp >= window.start {
+                if end <= window.end {
+                    result.append(temp)
+                } else {
+                    result.append(clipped(temp, start: temp.timestamp, end: window.end))
+                }
+            } else if end > window.start {
+                result.append(clipped(temp, start: window.start, end: min(end, window.end)))
+            }
+        }
+
+        let suspensions = ascending.filter { $0.type == .pumpSuspend || $0.type == .pumpResume }
+        if suspensions.last(where: { $0.timestamp < window.start })?.type == .pumpSuspend {
+            result.append(PumpHistoryEvent(
+                id: "\(windowAnchorPrefix)suspend-\(window.start.timeIntervalSince1970)",
+                type: .pumpSuspend,
+                timestamp: window.start
+            ))
+        }
+        result += suspensions.filter { isInside($0.timestamp) }
+
+        result.append(PumpHistoryEvent(
+            id: "\(windowAnchorPrefix)\(window.start.timeIntervalSince1970)",
+            type: .tempBasal,
+            timestamp: window.start,
+            amount: findBasalRateForOffset(for: minutesOfDay(window.start), in: basalProfile) ?? 0,
+            duration: 0,
+            isScheduledBasal: true
+        ))
+
+        return result.sorted { $0.timestamp > $1.timestamp }
+    }
+
+    private static func clipped(_ temp: PumpHistoryEvent, start: Date, end: Date) -> PumpHistoryEvent {
+        PumpHistoryEvent(
+            id: temp.id,
+            type: .tempBasal,
+            timestamp: start,
+            amount: temp.amount,
+            duration: max(0, Int((end.timeIntervalSince(start) / 60).rounded())),
+            isScheduledBasal: false,
+            deliveredUnits: nil
+        )
+    }
+
+    /// Writes one row every 5 minutes across the window so `hasSufficientTDD()`'s density check
+    /// (≥ 75 % of 288 rows a day over the trailing 7 days) is met by loop-cadence-shaped data, without
+    /// touching that gate. Replaces rows earlier backfill runs wrote into this window, and leaves out
+    /// slots a real loop cycle already filled, so the weighted average Dynamic ISF uses isn't
+    /// double-counted.
+    private func writeSyntheticTDDRows(for window: DateInterval, result: TDDResult) async throws {
         let context = makeContext()
         context.name = "TreatmentsBackfillService.writeSyntheticTDDRows"
+        let tolerance = Self.tddRowSpacing / 2
 
         try await context.perform {
-            let fetchRequest: NSFetchRequest<TDDStored> = TDDStored.fetchRequest()
-            fetchRequest.predicate = NSPredicate(
+            let staleRequest: NSFetchRequest<TDDStored> = TDDStored.fetchRequest()
+            staleRequest.predicate = NSPredicate(
                 format: "date >= %@ AND date < %@ AND isBackfilled == YES",
-                dayStart as NSDate,
-                dayEnd as NSDate
+                window.start as NSDate,
+                window.end as NSDate
             )
-            for stale in try context.fetch(fetchRequest) {
+            for stale in try context.fetch(staleRequest) {
                 context.delete(stale)
             }
+
+            let realRequest = NSFetchRequest<NSDictionary>(entityName: "TDDStored")
+            realRequest.resultType = .dictionaryResultType
+            realRequest.propertiesToFetch = ["date"]
+            realRequest.predicate = NSPredicate(
+                format: "date >= %@ AND date < %@ AND isBackfilled == NO",
+                window.start.addingTimeInterval(-tolerance) as NSDate,
+                window.end.addingTimeInterval(tolerance) as NSDate
+            )
+            let realDates = try context.fetch(realRequest).compactMap { $0["date"] as? Date }.sorted()
 
             let total = NSDecimalNumber(decimal: result.total)
             let bolus = NSDecimalNumber(decimal: result.bolus)
@@ -409,8 +610,11 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
             let scheduledBasal = NSDecimalNumber(decimal: result.scheduledBasal)
             let weightedAverage = result.weightedAverage.map { NSDecimalNumber(decimal: $0) }
 
-            var timestamp = dayStart
-            while timestamp < dayEnd {
+            var timestamp = window.start
+            while timestamp < window.end {
+                defer { timestamp = timestamp.addingTimeInterval(Self.tddRowSpacing) }
+                guard !Self.hasDate(near: timestamp, within: tolerance, in: realDates) else { continue }
+
                 let row = TDDStored(context: context)
                 row.id = UUID()
                 row.date = timestamp
@@ -420,7 +624,6 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
                 row.scheduledBasal = scheduledBasal
                 row.weightedAverage = weightedAverage
                 row.isBackfilled = true
-                timestamp = timestamp.addingTimeInterval(300)
             }
 
             guard context.hasChanges else { return }

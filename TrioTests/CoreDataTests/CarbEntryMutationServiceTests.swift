@@ -245,6 +245,10 @@ private final class StubNightscoutManager: NightscoutManager {
     func uploadProfiles() async throws {}
     func uploadNoteTreatment(note _: String) async -> Bool { true }
     func importSettings() async -> ScheduledNightscoutProfile? { nil }
+    func fetchTreatmentsForBackfill(sinceDate _: Date, untilDate _: Date) async throws
+        -> [NightscoutBackfill.TreatmentDocument] { [] }
+    func fetchGlucoseForBackfill(sinceDate _: Date, untilDate _: Date) async throws
+        -> [NightscoutBackfill.GlucoseDocument] { [] }
 }
 
 private final class StubHealthKitManager: HealthKitManager {

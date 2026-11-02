@@ -4,14 +4,27 @@ import LoopKitUI
 import Swinject
 
 protocol TDDStorage {
+    /// - Parameter now: end of the calculation window; running temp basals and inferred scheduled
+    ///   basal stop here. Pass a past date to compute a historical window (Nightscout backfill).
     func calculateTDD(
         pumpManager: any PumpManagerUI,
         pumpHistory: [PumpHistoryEvent],
-        basalProfile: [BasalProfileEntry]
+        basalProfile: [BasalProfileEntry],
+        now: Date
     ) async throws
         -> TDDResult
     func storeTDD(_ tddResult: TDDResult) async
     func hasSufficientTDD() async throws -> Bool
+}
+
+extension TDDStorage {
+    func calculateTDD(
+        pumpManager: any PumpManagerUI,
+        pumpHistory: [PumpHistoryEvent],
+        basalProfile: [BasalProfileEntry]
+    ) async throws -> TDDResult {
+        try await calculateTDD(pumpManager: pumpManager, pumpHistory: pumpHistory, basalProfile: basalProfile, now: Date())
+    }
 }
 
 /// Structure containing the results of TDD calculations
@@ -40,11 +53,13 @@ final class BaseTDDStorage: TDDStorage, Injectable {
     ///   - pumpManager: Representation of paired pump's PumpManagerUI
     ///   - pumpHistory: Array of pump history events
     ///   - basalProfile: Schedule used to infer delivery for uncovered gaps
+    ///   - now: End of the calculation window
     /// - Returns: TDDResult containing all calculated values
     func calculateTDD(
         pumpManager: any PumpManagerUI,
         pumpHistory: [PumpHistoryEvent],
-        basalProfile: [BasalProfileEntry]
+        basalProfile: [BasalProfileEntry],
+        now: Date
     ) async throws -> TDDResult {
         debug(.algorithm, "Calculating TDD from \(pumpHistory.count) pump events")
 
@@ -69,7 +84,6 @@ final class BaseTDDStorage: TDDStorage, Injectable {
         let pumpSuspendEvents = groupedEvents[.pumpSuspend] ?? []
         let pumpResumeEvents = groupedEvents[.pumpResume] ?? []
 
-        let now = Date()
         // Spans nothing else covers ran the pump's schedule, at the profile rate. The sweep owns
         // *when*, so a span can never overlap a temp basal or a suspension; the profile owns the
         // rate, because it is what Trio programmed into the pump.
@@ -86,7 +100,7 @@ final class BaseTDDStorage: TDDStorage, Injectable {
         )
 
         // Calculate all components concurrently
-        async let pumpDataHours = calculatePumpDataHours(pumpHistory)
+        async let pumpDataHours = calculatePumpDataHours(pumpHistory, now: now)
         async let bolusInsulin = calculateBolusInsulin(bolusEvents)
         async let scheduledBasalInsulin = calculateScheduledBasalInsulin(
             scheduledBasalSegments,
@@ -172,7 +186,7 @@ final class BaseTDDStorage: TDDStorage, Injectable {
     /// Calculates the number of hours of available pump history data
     /// - Parameter pumpHistory: Array of pump history events
     /// - Returns: Number of hours of available data
-    private func calculatePumpDataHours(_ pumpHistory: [PumpHistoryEvent]) -> Double {
+    private func calculatePumpDataHours(_ pumpHistory: [PumpHistoryEvent], now: Date) -> Double {
         guard let firstEvent = pumpHistory.last, // we are fetching in a descending order
               let lastEvent = pumpHistory.first
         else {
@@ -184,8 +198,8 @@ final class BaseTDDStorage: TDDStorage, Injectable {
 
         // If last event in the list is tempBasal, check if it is running longer than current time
         // If yes, set current date, else ignore
-        if lastEvent.type == .tempBasal, lastEvent.timestamp > Date().addingTimeInterval(-1) {
-            endDate = Date()
+        if lastEvent.type == .tempBasal, lastEvent.timestamp > now.addingTimeInterval(-1) {
+            endDate = now
         }
 
         return Double(endDate.timeIntervalSince(startDate)) / 3600.0

@@ -26,10 +26,8 @@ protocol NightscoutManager: GlucoseSource {
     /// Unlike `fetchCarbs()`/`fetchTempTargets()`, these are gated on network reachability only,
     /// not on the "Allow Fetching from Nightscout" (`isDownloadEnabled`) toggle, since backfill is a
     /// one-off manual action independent of the ongoing periodic fetch sync.
-    func fetchCarbsForBackfill(sinceDate: Date, untilDate: Date) async throws -> [CarbsEntry]
-    func fetchInsulinForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutTreatment]
-    func fetchTempBasalsForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutTreatment]
-    func fetchGlucoseForBackfill(sinceDate: Date, untilDate: Date) async throws -> [BloodGlucose]
+    func fetchTreatmentsForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutBackfill.TreatmentDocument]
+    func fetchGlucoseForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutBackfill.GlucoseDocument]
 }
 
 final class BaseNightscoutManager: NightscoutManager, Injectable {
@@ -458,25 +456,13 @@ final class BaseNightscoutManager: NightscoutManager, Injectable {
         }
     }
 
-    func fetchCarbsForBackfill(sinceDate: Date, untilDate: Date) async throws -> [CarbsEntry] {
+    func fetchTreatmentsForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutBackfill.TreatmentDocument] {
         guard let nightscout = nightscoutAPI else { throw BackfillError.nightscoutNotConfigured }
         guard isNetworkReachable else { throw BackfillError.networkUnreachable }
-        return try await nightscout.fetchCarbs(sinceDate: sinceDate, untilDate: untilDate)
+        return try await nightscout.fetchTreatmentsForBackfill(sinceDate: sinceDate, untilDate: untilDate)
     }
 
-    func fetchInsulinForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutTreatment] {
-        guard let nightscout = nightscoutAPI else { throw BackfillError.nightscoutNotConfigured }
-        guard isNetworkReachable else { throw BackfillError.networkUnreachable }
-        return try await nightscout.fetchInsulin(sinceDate: sinceDate, untilDate: untilDate)
-    }
-
-    func fetchTempBasalsForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutTreatment] {
-        guard let nightscout = nightscoutAPI else { throw BackfillError.nightscoutNotConfigured }
-        guard isNetworkReachable else { throw BackfillError.networkUnreachable }
-        return try await nightscout.fetchTempBasalTreatments(sinceDate: sinceDate, untilDate: untilDate)
-    }
-
-    func fetchGlucoseForBackfill(sinceDate: Date, untilDate: Date) async throws -> [BloodGlucose] {
+    func fetchGlucoseForBackfill(sinceDate: Date, untilDate: Date) async throws -> [NightscoutBackfill.GlucoseDocument] {
         guard let nightscout = nightscoutAPI else { throw BackfillError.nightscoutNotConfigured }
         guard isNetworkReachable else { throw BackfillError.networkUnreachable }
         return try await nightscout.fetchGlucoseForBackfill(sinceDate: sinceDate, untilDate: untilDate)

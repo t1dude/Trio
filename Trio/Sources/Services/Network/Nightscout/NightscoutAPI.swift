@@ -18,6 +18,8 @@ class NightscoutAPI {
         static let profilePath = "/api/v1/profile.json"
         static let retryCount = 1
         static let timeout: TimeInterval = 60
+        /// Upper bound on pages per backfill request, so a misbehaving server can't loop forever
+        static let maxBackfillPages = 20
     }
 
     private let excludedEnteredBy: [String] = [
@@ -105,36 +107,111 @@ extension NightscoutAPI {
         }
     }
 
-    /// Fetches historical glucose readings for the backfill feature, bounded to a specific window
-    /// (unlike `fetchLastGlucose`, which only supports an open-ended lower bound). Throws instead of
-    /// swallowing errors so day-bounded backfill callers can detect and report per-day failures.
-    /// - Parameters:
-    ///   - sinceDate: inclusive lower bound on `dateString`
-    ///   - untilDate: exclusive upper bound on `dateString`
-    ///   - count: max documents to return; callers should keep the requested window narrow (e.g. one day) to stay under this
-    func fetchGlucoseForBackfill(sinceDate: Date, untilDate: Date, count: Int = 500) async throws -> [BloodGlucose] {
+    // MARK: - Backfill
+
+    /// Fetches every treatment with `created_at` in `[sinceDate, untilDate)` for the backfill feature.
+    ///
+    /// Deliberately unfiltered by event type, insulin or `enteredBy`: uploaders store the same data under
+    /// different event types (see `NightscoutBackfill`), and the `enteredBy` exclusion combined with a
+    /// two-bound date range returns nothing on some Nightscout versions (seen on 15.0.7). Classification
+    /// and deduplication against local data happen on device. Pages through results newest-first, since a
+    /// day of AndroidAPS SMBs and temp basals alone can exceed one page.
+    func fetchTreatmentsForBackfill(
+        sinceDate: Date,
+        untilDate: Date,
+        pageSize: Int = 1000
+    ) async throws -> [NightscoutBackfill.TreatmentDocument] {
+        let lowerBound = Formatter.iso8601withFractionalSeconds.string(from: sinceDate)
+        // `$lte` on the oldest raw `created_at` of the previous page: comparison is on strings, and a raw
+        // value is the only bound guaranteed to sort exactly like the documents it came from
+        var upperBound = (operator: "$lt", value: Formatter.iso8601withFractionalSeconds.string(from: untilDate))
+        var documents: [NightscoutBackfill.TreatmentDocument] = []
+        var seenIDs = Set<String>()
+
+        for _ in 0 ..< Config.maxBackfillPages {
+            let (page, rawCount) = try await fetchBackfillPage(
+                path: Config.treatmentsPath,
+                queryItems: [
+                    URLQueryItem(name: "count", value: "\(pageSize)"),
+                    URLQueryItem(name: "find[created_at][$gte]", value: lowerBound),
+                    URLQueryItem(name: "find[created_at][\(upperBound.operator)]", value: upperBound.value)
+                ],
+                as: NightscoutBackfill.TreatmentDocument.self
+            )
+
+            var added = 0
+            for document in page {
+                let key = document
+                    .stableID ?? "\(document.eventType ?? "")-\(document.createdAtRaw ?? "")-\(document.insulin ?? 0)"
+                if seenIDs.insert(key).inserted {
+                    documents.append(document)
+                    added += 1
+                }
+            }
+
+            guard rawCount >= pageSize, added > 0,
+                  let oldest = page.compactMap(\.createdAtRaw).min()
+            else { break }
+            upperBound = (operator: "$lte", value: oldest)
+        }
+
+        return documents
+    }
+
+    /// Fetches CGM readings with `date` in `[sinceDate, untilDate)` for the backfill feature.
+    ///
+    /// Filters on the numeric `date` (epoch ms) rather than `dateString`, whose format differs between
+    /// uploaders (UTC for Trio and AndroidAPS, local offsets for others) and so doesn't compare as a string.
+    /// Pages through results, since 1-minute CGMs produce 1440 readings a day.
+    func fetchGlucoseForBackfill(
+        sinceDate: Date,
+        untilDate: Date,
+        pageSize: Int = 1000
+    ) async throws -> [NightscoutBackfill.GlucoseDocument] {
+        let lowerBound = Int64((sinceDate.timeIntervalSince1970 * 1000).rounded(.down))
+        var upperBound = Int64((untilDate.timeIntervalSince1970 * 1000).rounded(.down))
+        var documents: [NightscoutBackfill.GlucoseDocument] = []
+
+        for _ in 0 ..< Config.maxBackfillPages {
+            let (page, rawCount) = try await fetchBackfillPage(
+                path: Config.entriesPath,
+                queryItems: [
+                    URLQueryItem(name: "count", value: "\(pageSize)"),
+                    URLQueryItem(name: "find[date][$gte]", value: "\(lowerBound)"),
+                    URLQueryItem(name: "find[date][$lt]", value: "\(upperBound)")
+                ],
+                as: NightscoutBackfill.GlucoseDocument.self
+            )
+            documents.append(contentsOf: page)
+
+            guard rawCount >= pageSize,
+                  let oldest = page.compactMap(\.date).min()
+            else { break }
+            let next = Int64((oldest.timeIntervalSince1970 * 1000).rounded(.down))
+            guard next < upperBound else { break }
+            upperBound = next
+        }
+
+        return documents
+    }
+
+    private func fetchBackfillPage<T: Decodable>(
+        path: String,
+        queryItems: [URLQueryItem],
+        as _: T.Type
+    ) async throws -> (items: [T], rawCount: Int) {
         var components = URLComponents()
         components.scheme = url.scheme
         components.host = url.host
         components.port = url.port
-        components.path = Config.entriesPath
-        components.queryItems = [
-            URLQueryItem(name: "count", value: "\(count)"),
-            URLQueryItem(
-                name: "find[dateString][$gte]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: sinceDate)
-            ),
-            URLQueryItem(
-                name: "find[dateString][$lt]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: untilDate)
-            )
-        ]
+        components.path = path
+        components.queryItems = queryItems
 
-        guard let url = components.url else {
+        guard let requestURL = components.url else {
             throw URLError(.badURL)
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: requestURL)
         request.timeoutInterval = Config.timeout
 
         if let secret = secret {
@@ -144,16 +221,11 @@ extension NightscoutAPI {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
-                throw URLError(.badServerResponse)
+                throw Error.badStatusCode
             }
-            let glucose = try JSONCoding.decoder.decode([BloodGlucose].self, from: data)
-            return glucose.map {
-                var reading = $0
-                reading.glucose = $0.sgv
-                return reading
-            }
+            return try NightscoutBackfill.decodeLossy(T.self, from: data)
         } catch {
-            warning(.nightscout, "Glucose backfill fetching error: \(error)")
+            warning(.nightscout, "Backfill fetch from \(path) failed", error: error)
             throw error
         }
     }
@@ -167,7 +239,7 @@ extension NightscoutAPI {
         }
     }
 
-    func fetchCarbs(sinceDate: Date? = nil, untilDate: Date? = nil) async throws -> [CarbsEntry] {
+    func fetchCarbs(sinceDate: Date? = nil) async throws -> [CarbsEntry] {
         var components = URLComponents()
         components.scheme = url.scheme
         components.host = url.host
@@ -178,27 +250,13 @@ extension NightscoutAPI {
             URLQueryItem(name: "find[carbs][$exists]", value: "true")
         ]
 
-        // The enteredBy exclusion (`$and`/`$ne`) combined with a two-bound `created_at` range (both
-        // $gte/$gt AND $lt) returns zero matches on some Nightscout versions — confirmed against a real
-        // instance (15.0.7) where the same query without the exclusion correctly returns matches. The
-        // day-bounded backfill call (untilDate != nil) always uses a two-bound range, so it must skip the
-        // exclusion; the open-ended continuous-fetch call (untilDate == nil) is unaffected and keeps it.
-        if untilDate == nil {
-            items.append(contentsOf: makeNeQueryItems())
-        }
+        items.append(contentsOf: makeNeQueryItems())
         components.queryItems = items
 
         if let date = sinceDate {
             let dateItem = URLQueryItem(
                 name: "find[created_at][$gt]",
                 value: Formatter.iso8601withFractionalSeconds.string(from: date)
-            )
-            components.queryItems?.append(dateItem)
-        }
-        if let untilDate {
-            let dateItem = URLQueryItem(
-                name: "find[created_at][$lt]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: untilDate)
             )
             components.queryItems?.append(dateItem)
         }
@@ -217,104 +275,6 @@ extension NightscoutAPI {
         }
         let carbs = try JSONCoding.decoder.decode([CarbsEntry].self, from: data)
         return carbs
-    }
-
-    /// Fetches historical bolus/insulin treatments (any eventType carrying an `insulin` field) for the backfill feature.
-    /// - Parameters:
-    ///   - sinceDate: inclusive lower bound on `created_at`
-    ///   - untilDate: exclusive upper bound on `created_at`
-    ///   - count: max documents to return; callers should keep the requested window narrow (e.g. one day) to stay under this
-    func fetchInsulin(sinceDate: Date, untilDate: Date, count: Int = 500) async throws -> [NightscoutTreatment] {
-        var components = URLComponents()
-        components.scheme = url.scheme
-        components.host = url.host
-        components.port = url.port
-        components.path = Config.treatmentsPath
-
-        var items: [URLQueryItem] = [
-            URLQueryItem(name: "find[insulin][$exists]", value: "true"),
-            URLQueryItem(name: "count", value: "\(count)"),
-            URLQueryItem(
-                name: "find[created_at][$gte]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: sinceDate)
-            ),
-            URLQueryItem(
-                name: "find[created_at][$lt]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: untilDate)
-            )
-        ]
-        // No enteredBy exclusion here: combined with this two-bound `created_at` range it returns zero
-        // matches on some Nightscout versions (confirmed against a real 15.0.7 instance). Local dedup in
-        // TreatmentsBackfillService (by stable id and by timestamp) protects against re-importing what
-        // this same Trio instance already uploaded, so the exclusion isn't needed for correctness here.
-        components.queryItems = items
-
-        var request = URLRequest(url: components.url!)
-        request.timeoutInterval = Config.timeout
-
-        if let secret = secret {
-            request.addValue(secret.sha1(), forHTTPHeaderField: "api-secret")
-        }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            return try JSONCoding.decoder.decode([NightscoutTreatment].self, from: data)
-        } catch {
-            warning(.nightscout, "Insulin treatment fetching error: \(error)")
-            throw error
-        }
-    }
-
-    /// Fetches historical temp basal treatments for the backfill feature.
-    /// - Parameters:
-    ///   - sinceDate: inclusive lower bound on `created_at`
-    ///   - untilDate: exclusive upper bound on `created_at`
-    ///   - count: max documents to return; callers should keep the requested window narrow (e.g. one day) to stay under this
-    func fetchTempBasalTreatments(sinceDate: Date, untilDate: Date, count: Int = 500) async throws -> [NightscoutTreatment] {
-        var components = URLComponents()
-        components.scheme = url.scheme
-        components.host = url.host
-        components.port = url.port
-        components.path = Config.treatmentsPath
-
-        var items: [URLQueryItem] = [
-            URLQueryItem(name: "find[eventType]", value: "Temp+Basal"),
-            URLQueryItem(name: "count", value: "\(count)"),
-            URLQueryItem(
-                name: "find[created_at][$gte]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: sinceDate)
-            ),
-            URLQueryItem(
-                name: "find[created_at][$lt]",
-                value: Formatter.iso8601withFractionalSeconds.string(from: untilDate)
-            )
-        ]
-        // See fetchInsulin: no enteredBy exclusion — it zeroes out results when combined with this
-        // two-bound date range on some Nightscout versions. Local dedup covers re-import safety instead.
-        components.queryItems = items
-
-        var request = URLRequest(url: components.url!)
-        request.timeoutInterval = Config.timeout
-
-        if let secret = secret {
-            request.addValue(secret.sha1(), forHTTPHeaderField: "api-secret")
-        }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse, (200 ... 299).contains(httpResponse.statusCode) else {
-                throw URLError(.badServerResponse)
-            }
-            return try JSONCoding.decoder.decode([NightscoutTreatment].self, from: data)
-        } catch {
-            warning(.nightscout, "Temp basal treatment fetching error: \(error)")
-            throw error
-        }
     }
 
     func deleteCarbs(withId id: String) async throws {
