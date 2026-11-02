@@ -14,8 +14,8 @@ struct TreatmentsBackfillSummary {
     let daysSkipped: [Date]
     /// Windows that were fetched successfully but had no bolus/temp-basal data, neither in Nightscout
     /// nor locally. A high count means Nightscout itself doesn't have insulin dosing history that far
-    /// back (common if uploading only started recently), not a bug in the import — those windows'
-    /// synthesized TDD is scheduled basal only, since there's nothing else to add.
+    /// back (common if uploading only started recently), not a bug in the import. No TDD is
+    /// synthesized for these windows: it would be scheduled basal only.
     let daysWithNoTreatmentDataInNightscout: Int
 }
 
@@ -106,20 +106,24 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
                     to: window.end
                 )
                 let windowHistory = Self.pumpHistory(for: window, from: history, basalProfile: basalProfile)
-                if !windowHistory
+                let hasInsulinData = windowHistory
                     .contains(where: { $0.type == .bolus || ($0.type == .tempBasal && $0.isScheduledBasal != true) })
-                {
-                    daysWithNoTreatmentData += 1
-                }
 
-                let tddResult = try await tddStorage.calculateTDD(
-                    pumpManager: pumpManager,
-                    pumpHistory: windowHistory,
-                    basalProfile: basalProfile,
-                    now: window.end
-                )
-                try await writeSyntheticTDDRows(for: window, result: tddResult)
-                daysSynthesized += 1
+                if hasInsulinData {
+                    let tddResult = try await tddStorage.calculateTDD(
+                        pumpManager: pumpManager,
+                        pumpHistory: windowHistory,
+                        basalProfile: basalProfile,
+                        now: window.end
+                    )
+                    try await writeSyntheticTDDRows(for: window, result: tddResult)
+                    daysSynthesized += 1
+                } else {
+                    // No insulin data at all: a TDD here would be scheduled basal only — made up, and low
+                    // enough to skew Dynamic ISF. Skip the window, and drop rows an earlier run wrote.
+                    daysWithNoTreatmentData += 1
+                    try await writeSyntheticTDDRows(for: window, result: nil)
+                }
             } catch {
                 warning(.nightscout, "Treatments backfill failed for \(window)", error: error)
                 daysSkipped.append(window.start)
@@ -577,8 +581,8 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
     /// (≥ 75 % of 288 rows a day over the trailing 7 days) is met by loop-cadence-shaped data, without
     /// touching that gate. Replaces rows earlier backfill runs wrote into this window, and leaves out
     /// slots a real loop cycle already filled, so the weighted average Dynamic ISF uses isn't
-    /// double-counted.
-    private func writeSyntheticTDDRows(for window: DateInterval, result: TDDResult) async throws {
+    /// double-counted. A `nil` result only removes earlier backfilled rows.
+    private func writeSyntheticTDDRows(for window: DateInterval, result: TDDResult?) async throws {
         let context = makeContext()
         context.name = "TreatmentsBackfillService.writeSyntheticTDDRows"
         let tolerance = Self.tddRowSpacing / 2
@@ -592,6 +596,12 @@ final class BaseTreatmentsBackfillService: TreatmentsBackfillService, Injectable
             )
             for stale in try context.fetch(staleRequest) {
                 context.delete(stale)
+            }
+
+            guard let result else {
+                guard context.hasChanges else { return }
+                try context.save()
+                return
             }
 
             let realRequest = NSFetchRequest<NSDictionary>(entityName: "TDDStored")

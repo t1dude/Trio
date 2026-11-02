@@ -195,7 +195,7 @@ extension NightscoutConfig {
                     if summary.daysWithNoTreatmentDataInNightscout > 0 {
                         result +=
                             " \(summary.daysWithNoTreatmentDataInNightscout) day(s) had no bolus/temp-basal data in " +
-                            "Nightscout at all — those days' TDD reflects scheduled basal only, not a backfill error."
+                            "Nightscout at all, so no TDD was synthesized for them — not a backfill error."
                     }
                     treatmentsBackfillMessage = result
                 }
