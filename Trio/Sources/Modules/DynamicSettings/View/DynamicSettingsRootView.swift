@@ -42,32 +42,8 @@ extension DynamicSettings {
             )
         }
 
-        private var conversionFormatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 1
-
-            return formatter
-        }
-
         @Environment(\.colorScheme) var colorScheme
         @Environment(AppState.self) var appState
-
-        private var formatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            return formatter
-        }
-
-        private var glucoseFormatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            if state.units == .mmolL {
-                formatter.maximumFractionDigits = 1
-            } else { formatter.maximumFractionDigits = 0 }
-            formatter.roundingMode = .halfUp
-            return formatter
-        }
 
         var body: some View {
             List {
@@ -102,6 +78,8 @@ extension DynamicSettings {
                                     .font(.footnote)
                                     .foregroundColor(miniHintTextColor)
                                     .lineLimit(nil)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
 
                                 Spacer()
                                 Button(
@@ -158,7 +136,7 @@ extension DynamicSettings {
                                     },
                                     label: {
                                         HStack {
-                                            Image(systemName: "questionmark.circle")
+                                            Image(systemName: "questionmark.circle").accessibilityLabel(Text("More information"))
                                         }
                                     }
                                 ).buttonStyle(BorderlessButtonStyle())

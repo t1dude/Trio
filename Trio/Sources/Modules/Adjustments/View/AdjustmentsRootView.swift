@@ -37,17 +37,6 @@ extension Adjustments {
         @Environment(\.colorScheme) var colorScheme
         @Environment(AppState.self) var appState
 
-        func formattedGlucose(glucose: Decimal) -> String {
-            let formattedValue: String
-            if state.units == .mgdL {
-                formattedValue = Formatter.glucoseFormatter(for: state.units)
-                    .string(from: glucose as NSDecimalNumber) ?? "\(glucose)"
-            } else {
-                formattedValue = glucose.formattedAsMmolL
-            }
-            return "\(formattedValue) \(state.units.rawValue)"
-        }
-
         var body: some View {
             tempTargetDeleteConfirmation(overrideDeleteConfirmation(mainContent))
         }
@@ -151,51 +140,54 @@ extension Adjustments {
                         EditTempTargetForm(tempTargetToEdit: tempTarget, state: state)
                     }
                 }
-                .confirmationDialog("Override to Stop", isPresented: $showCancelOverrideConfirmDialog) {
-                    Button("Stop", role: .destructive) {
-                        Task {
-                            // Save cancelled Override in OverrideRunStored Entity
-                            // Cancel ALL active Override
-                            await state.disableAllActiveOverrides(createOverrideRunEntry: true)
+                .glassActionSheet(
+                    "Override to Stop",
+                    message: Text("Stop the Override \"\(state.currentActiveOverride?.name ?? "")\"?"),
+                    isPresented: $showCancelOverrideConfirmDialog,
+                    actions: [
+                        GlassSheetAction("Stop", role: .destructive) {
+                            Task {
+                                // Save cancelled Override in OverrideRunStored Entity
+                                // Cancel ALL active Override
+                                info(.treatments, "Override stopped")
+                                await state.disableAllActiveOverrides(createOverrideRunEntry: true)
+                            }
                         }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Stop the Override \"\(state.currentActiveOverride?.name ?? "")\"?")
-                }
-                .confirmationDialog("Temp Target to Stop", isPresented: $showCancelTempTargetConfirmDialog) {
-                    Button("Stop", role: .destructive) {
-                        Task {
-                            // Save cancelled Temp Targets in TempTargetRunStored Entity
-                            // Cancel ALL active Temp Targets
-                            await state.disableAllActiveTempTargets(createTempTargetRunEntry: true)
-                            // Update View
-                            state.updateLatestTempTargetConfiguration()
+                    ]
+                )
+                .glassActionSheet(
+                    "Temp Target to Stop",
+                    message: Text("Stop the Temp Target \"\(state.currentActiveTempTarget?.name ?? "")\"?"),
+                    isPresented: $showCancelTempTargetConfirmDialog,
+                    actions: [
+                        GlassSheetAction("Stop", role: .destructive) {
+                            Task {
+                                // Save cancelled Temp Targets in TempTargetRunStored Entity
+                                // Cancel ALL active Temp Targets
+                                info(.treatments, "Temp target stopped")
+                                await state.disableAllActiveTempTargets(createTempTargetRunEntry: true)
+                                // Update View
+                                state.updateLatestTempTargetConfiguration()
+                            }
                         }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("Stop the Temp Target \"\(state.currentActiveTempTarget?.name ?? "")\"?")
-                }
-                .confirmationDialog(
+                    ]
+                )
+                .glassActionSheet(
                     "Activate Preset",
-                    isPresented: presetActivationConfirmationBinding
-                ) {
-                    Button("Activate") {
-                        if let activation = pendingPresetActivation {
-                            activatePreset(activation)
+                    message: pendingPresetActivation.map { Text($0.confirmationMessage) },
+                    isPresented: presetActivationConfirmationBinding,
+                    actions: [
+                        GlassSheetAction("Activate") {
+                            if let activation = pendingPresetActivation {
+                                activatePreset(activation)
+                            }
                         }
-                    }
-
-                    Button("Cancel", role: .cancel) {
+                    ],
+                    onCancel: {
                         state.shouldDisplayPresetStartConfirmDialog = false
                         pendingPresetActivation = nil
                     }
-                } message: {
-                    if let activation = pendingPresetActivation {
-                        Text(activation.confirmationMessage)
-                    }
-                }
+                )
             }).background(appState.trioBackgroundColor(for: colorScheme))
         }
 
@@ -228,21 +220,16 @@ extension Adjustments {
                         Spacer()
                         Image(systemName: "square.and.pencil")
                             .foregroundStyle(Color.primary)
+                            .accessibilityHidden(true)
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        Task {
-                            /// To avoid editing the Preset when a Preset-Override is running we first duplicate the Preset-Override as a non-Preset Override
-                            /// The currentActiveOverride variable in the State will update automatically via MOC notification
-                            await state.duplicateOverridePresetAndCancelPreviousOverride()
-
-                            /// selectedOverride is used for passing the chosen Override to the EditSheet so we have to set the updated currentActiveOverride to be the selectedOverride
-                            selectedOverride = state.currentActiveOverride
-
-                            /// Now we can show the Edit sheet
-                            state.showOverrideEditSheet = true
-                        }
+                        editActiveOverride()
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityHint(Text(String(localized: "Double tap to edit", comment: "Accessibility hint")))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { editActiveOverride() }
                 }
                 .listRowBackground(Color.purple.opacity(0.8))
             case .tempTargets:
@@ -253,23 +240,44 @@ extension Adjustments {
                         Spacer()
                         Image(systemName: "square.and.pencil")
                             .foregroundStyle(Color.primary)
+                            .accessibilityHidden(true)
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        Task {
-                            /// To avoid editing the Preset when a Preset-Override is running we first duplicate the Preset-Override as a non-Preset Override
-                            /// The currentActiveOverride variable in the State will update automatically via MOC notification
-                            await state.duplicateTempTargetPresetAndCancelPreviousTempTarget()
-
-                            /// selectedOverride is used for passing the chosen Override to the EditSheet so we have to set the updated currentActiveOverride to be the selectedOverride
-                            selectedTempTarget = state.currentActiveTempTarget
-
-                            /// Now we can show the Edit sheet
-                            state.showTempTargetEditSheet = true
-                        }
+                        editActiveTempTarget()
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityHint(Text(String(localized: "Double tap to edit", comment: "Accessibility hint")))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { editActiveTempTarget() }
                 }
                 .listRowBackground(Color.loopGreen.opacity(0.8))
+            }
+        }
+
+        private func editActiveOverride() {
+            Task {
+                /// To avoid editing the Preset when a Preset-Override is running we first duplicate the Preset-Override as a non-Preset Override
+                /// The currentActiveOverride variable in the State will update automatically via MOC notification
+                await state.duplicateOverridePresetAndCancelPreviousOverride()
+
+                /// selectedOverride is used for passing the chosen Override to the EditSheet so we have to set the updated currentActiveOverride to be the selectedOverride
+                selectedOverride = state.currentActiveOverride
+
+                /// Now we can show the Edit sheet
+                state.showOverrideEditSheet = true
+            }
+        }
+
+        private func editActiveTempTarget() {
+            Task {
+                /// To avoid editing the Preset when a Preset-TempTarget is running we first duplicate it as a non-Preset TempTarget
+                await state.duplicateTempTargetPresetAndCancelPreviousTempTarget()
+
+                selectedTempTarget = state.currentActiveTempTarget
+
+                /// Now we can show the Edit sheet
+                state.showTempTargetEditSheet = true
             }
         }
 

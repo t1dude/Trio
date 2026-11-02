@@ -16,7 +16,6 @@ enum Screen: Identifiable, Hashable {
     case crEditor
     case targetsEditor
     case treatmentView
-    case manualTempBasal
     case history
     case cgm
     case healthkit
@@ -30,7 +29,7 @@ enum Screen: Identifiable, Hashable {
     case watch
     case userInterfaceSettings
     case bolusCalculatorConfig
-    case quickBolusConfig
+    case quickPickTreatmentsConfig
     case dynamicISF
     case calibrations
     case shortcutsConfig
@@ -96,8 +95,6 @@ extension Screen {
             TargetsEditor.RootView(resolver: resolver)
         case .treatmentView:
             Treatments.RootView(resolver: resolver)
-        case .manualTempBasal:
-            ManualTempBasal.RootView(resolver: resolver)
         case .history:
             History.RootView(resolver: resolver)
         case .cgm:
@@ -128,8 +125,8 @@ extension Screen {
             UserInterfaceSettings.RootView(resolver: resolver)
         case .bolusCalculatorConfig:
             BolusCalculatorConfig.RootView(resolver: resolver)
-        case .quickBolusConfig:
-            QuickPickBolusesConfig.RootView(resolver: resolver)
+        case .quickPickTreatmentsConfig:
+            QuickPickTreatmentsConfig.RootView(resolver: resolver)
         case .dynamicISF:
             DynamicSettings.RootView(resolver: resolver)
         case .calibrations:

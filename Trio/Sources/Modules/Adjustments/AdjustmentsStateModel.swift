@@ -114,7 +114,8 @@ extension Adjustments {
             units = settingsManager.settings.units
             defaultSmbMinutes = settingsManager.preferences.maxSMBBasalMinutes
             defaultUamMinutes = settingsManager.preferences.maxUAMSMBBasalMinutes
-            autosensMax = settingsManager.preferences.autosensMax
+            // clamped: drives predicted temp-target percentages, must match the algorithm
+            autosensMax = settingsManager.preferences.clamped(for: settingsManager.settings.dosingMode).autosensMax
             settingHalfBasalTarget = settingsManager.preferences.halfBasalExerciseTarget
             halfBasalTarget = settingsManager.preferences.halfBasalExerciseTarget
             highTTraisesSens = settingsManager.preferences.highTemptargetRaisesSensitivity
@@ -144,9 +145,7 @@ extension Adjustments {
                     setupOverridePresetsArray()
                     try await nightscoutManager.uploadProfiles()
                 } catch {
-                    debugPrint(
-                        "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to save Override Presets order or upload profiles"
-                    )
+                    warning(.treatments, "Saving override preset order or uploading profiles failed", error: error)
                 }
             }
         }
@@ -162,7 +161,7 @@ extension Adjustments {
                 try viewContext.save()
                 setupTempTargetPresetsArray()
             } catch {
-                debugPrint("\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to save Temp Target Presets order")
+                warning(.treatments, "Saving temp target preset order failed", error: error)
             }
         }
     }
@@ -230,7 +229,8 @@ extension Adjustments.StateModel: SettingsObserver, PreferencesObserver {
     func preferencesDidChange(_: Preferences) {
         defaultSmbMinutes = settingsManager.preferences.maxSMBBasalMinutes
         defaultUamMinutes = settingsManager.preferences.maxUAMSMBBasalMinutes
-        autosensMax = settingsManager.preferences.autosensMax
+        // clamped: drives predicted temp-target percentages, must match the algorithm
+        autosensMax = settingsManager.preferences.clamped(for: settingsManager.settings.dosingMode).autosensMax
         settingHalfBasalTarget = settingsManager.preferences.halfBasalExerciseTarget
         halfBasalTarget = settingsManager.preferences.halfBasalExerciseTarget
         highTTraisesSens = settingsManager.preferences.highTemptargetRaisesSensitivity

@@ -84,17 +84,12 @@ extension SettingsExport {
         func exportSettings(
             categories: Set<ExportCategory>? = nil
         ) async -> Result<URL, ExportError> {
-            debug(.default, "🔄 EXPORT: Starting settings export...")
-
             await MainActor.run { isExporting = true }
 
             defer { Task { @MainActor in isExporting = false } }
 
             let categoriesToExport = categories ?? selectedCategories
-            debug(
-                .default,
-                "🔄 EXPORT: Exporting categories: \(categoriesToExport.map(\.rawValue).joined(separator: ", ")) in .CSV format"
-            )
+            debug(.settings, "Exporting settings categories: \(categoriesToExport.map(\.rawValue).joined(separator: ", "))")
 
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd_HHmmss"
@@ -106,15 +101,19 @@ extension SettingsExport {
                 return .failure(.documentsDirectoryNotFound)
             }
             let fileURL = documentsDirectory.appendingPathComponent(fileName)
-            debug(.default, "Export file path: \(fileURL.path)")
 
             var exportSettings: [ExportSetting] = []
 
             let trioSettings = settingsManager.settings
             let preferences = settingsManager.preferences
-            debug(.default, "🔄 EXPORT: Settings managers initialized")
 
             // Helper function to add a setting
+            /// Marks a stored value the active dosing mode overrides, so an export reads true.
+            func overrideNote(stored: String, isOverridden: Bool, effective: String) -> String {
+                guard isOverridden else { return stored }
+                return String(localized: "\(stored) (mode is using \(effective))")
+            }
+
             func addSetting(category: String, subcategory: String = "", name: String, value: String, unit: String = "") {
                 exportSettings.append(ExportSetting(
                     category: category,
@@ -132,6 +131,11 @@ extension SettingsExport {
                     category: exportCategory,
                     name: String(localized: "Export Date"),
                     value: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .medium)
+                )
+                addSetting(
+                    category: exportCategory,
+                    name: String(localized: "Dosing Mode"),
+                    value: trioSettings.dosingMode.displayName
                 )
                 addSetting(category: exportCategory, name: String(localized: "App Version"), value: versionNumber)
                 addSetting(category: exportCategory, name: String(localized: "Build Number"), value: buildNumber)
@@ -195,7 +199,12 @@ extension SettingsExport {
                     category: therapyCategory,
                     subcategory: unitsLimitsSubcategory,
                     name: String(localized: "Maximum Insulin on Board (IOB)"),
-                    value: String(describing: preferences.maxIOB),
+                    value: overrideNote(
+                        stored: String(describing: preferences.maxIOB),
+                        isOverridden: trioSettings.dosingMode.automation == .reductionsOnly ||
+                            trioSettings.dosingMode.automation == .hypoSuspendOnly,
+                        effective: "0"
+                    ),
                     unit: "U"
                 )
 
@@ -307,14 +316,22 @@ extension SettingsExport {
                     category: algorithmCategory,
                     subcategory: autosensSubcategory,
                     name: String(localized: "Autosens Max"),
-                    value: String(format: "%.0f", (preferences.autosensMax as NSDecimalNumber).doubleValue * 100),
+                    value: overrideNote(
+                        stored: String(format: "%.0f", (preferences.autosensMax as NSDecimalNumber).doubleValue * 100),
+                        isOverridden: trioSettings.dosingMode == .basalTesting,
+                        effective: "100"
+                    ),
                     unit: "%"
                 )
                 addSetting(
                     category: algorithmCategory,
                     subcategory: autosensSubcategory,
                     name: String(localized: "Autosens Min"),
-                    value: String(format: "%.0f", (preferences.autosensMin as NSDecimalNumber).doubleValue * 100),
+                    value: overrideNote(
+                        stored: String(format: "%.0f", (preferences.autosensMin as NSDecimalNumber).doubleValue * 100),
+                        isOverridden: trioSettings.dosingMode == .basalTesting,
+                        effective: "100"
+                    ),
                     unit: "%"
                 )
                 addSetting(
@@ -417,7 +434,11 @@ extension SettingsExport {
                     category: algorithmCategory,
                     subcategory: dynamicSubcategory,
                     name: String(localized: "Dynamic ISF"),
-                    value: dynamicISFValue
+                    value: overrideNote(
+                        stored: dynamicISFValue,
+                        isOverridden: trioSettings.dosingMode == .basalTesting,
+                        effective: String(localized: "Disabled")
+                    )
                 )
 
                 // Show adjustment factors as percentages with proper labels
@@ -660,8 +681,8 @@ extension SettingsExport {
                 addSetting(
                     category: featuresCategory,
                     subcategory: treatmentsSubcategory,
-                    name: String(localized: "Enable Quick-Pick Boluses"),
-                    value: trioSettings.enableQuickBolus ? String(localized: "Enabled") : String(localized: "Disabled")
+                    name: String(localized: "Enable Quick-Pick Treatments"),
+                    value: trioSettings.enableQuickPickTreatments ? String(localized: "Enabled") : String(localized: "Disabled")
                 )
                 addSetting(
                     category: featuresCategory,
@@ -809,8 +830,20 @@ extension SettingsExport {
                 addSetting(
                     category: featuresCategory,
                     subcategory: userInterfaceSubcategory,
-                    name: String(localized: "Time in Range Type"),
-                    value: trioSettings.timeInRangeType.rawValue
+                    name: String(localized: "TIR Lower Threshold"),
+                    value: trioSettings.timeInRangeType.displayName(for: trioSettings.units)
+                )
+                addSetting(
+                    category: featuresCategory,
+                    subcategory: userInterfaceSubcategory,
+                    name: String(localized: "Home Statistics Panel"),
+                    value: trioSettings.homeStatsPanelFace.displayName
+                )
+                addSetting(
+                    category: featuresCategory,
+                    subcategory: userInterfaceSubcategory,
+                    name: String(localized: "Home Statistics Range"),
+                    value: trioSettings.homeStatsPanelRange.displayName
                 )
                 addSetting(
                     category: featuresCategory,
@@ -871,6 +904,14 @@ extension SettingsExport {
                     name: String(localized: "Lock Screen Widget Style"),
                     value: trioSettings.lockScreenView.rawValue
                 )
+                if trioSettings.lockScreenView == .simple {
+                    addSetting(
+                        category: notificationsCategory,
+                        subcategory: liveActivitySubcategory,
+                        name: String(localized: "Font Size"),
+                        value: trioSettings.liveActivitySimpleFontSize.displayName
+                    )
+                }
                 addSetting(
                     category: notificationsCategory,
                     subcategory: liveActivitySubcategory,
@@ -900,6 +941,12 @@ extension SettingsExport {
                 addSetting(
                     category: servicesCategory,
                     subcategory: nightscoutSubcategory,
+                    name: String(localized: "Upload CGM Sensor States"),
+                    value: trioSettings.uploadCGMSensorStates ? String(localized: "Enabled") : String(localized: "Disabled")
+                )
+                addSetting(
+                    category: servicesCategory,
+                    subcategory: nightscoutSubcategory,
                     name: String(localized: "Allow Fetching From Nightscout"),
                     value: trioSettings.isDownloadEnabled ? String(localized: "Enabled") : String(localized: "Disabled")
                 )
@@ -917,10 +964,8 @@ extension SettingsExport {
             // Temp Target Presets
             if categoriesToExport.contains(.tempTargetPresets) {
                 let category = String(localized: "Temp Target Presets")
-                debug(.default, "🔄 EXPORT: Fetching temp target presets...")
 
                 let tempTargetPresetIDs = (try? await tempTargetsStorage.fetchForTempTargetPresets()) ?? []
-                debug(.default, "🔄 EXPORT: Found \(tempTargetPresetIDs.count) temp target preset IDs")
 
                 if !tempTargetPresetIDs.isEmpty {
                     do {
@@ -939,15 +984,11 @@ extension SettingsExport {
                                 let presetName = preset.name ?? "Unknown Temp Target"
 
                                 if let target = preset.target {
-                                    let targetValue = trioSettings.units == .mgdL
-                                        ? target.description
-                                        : target.decimalValue.formattedAsMmolL
-
                                     processedTempTargetPresets.append(.init(
                                         category: category,
                                         subcategory: presetName,
                                         name: "Target",
-                                        value: targetValue,
+                                        value: String(describing: target.decimalValue.asUnit(trioSettings.units)),
                                         unit: trioSettings.units.rawValue
                                     ))
                                 }
@@ -963,10 +1004,10 @@ extension SettingsExport {
                                 }
 
                                 if let halfBasalTarget = preset.halfBasalTarget {
-                                    let halfBasalValue = trioSettings.units == .mgdL
-                                        ? halfBasalTarget.description
-                                        : halfBasalTarget.decimalValue.formattedAsMmolL
-
+                                    let halfBasalValue = String(
+                                        describing: halfBasalTarget.decimalValue
+                                            .asUnit(trioSettings.units)
+                                    )
                                     processedTempTargetPresets.append(.init(
                                         category: category,
                                         subcategory: presetName,
@@ -981,7 +1022,7 @@ extension SettingsExport {
                         }
 
                         exportSettings.append(contentsOf: tempTargetPresets)
-                        debug(.default, "✅ EXPORT: Added \(tempTargetPresets.count) temp target preset rows")
+                        debug(.settings, "Exported \(tempTargetPresets.count) temp target preset rows")
                     } catch {
                         // STRICT: surface the real issue
                         return .failure(.unknown("Failed to extract Temp Targets: \(error.localizedDescription)"))
@@ -992,11 +1033,9 @@ extension SettingsExport {
             // Override Presets
             if categoriesToExport.contains(.overridePresets) {
                 let category = String(localized: "Override Presets")
-                debug(.default, "🔄 EXPORT: Fetching override presets...")
 
                 do {
                     let overridePresetIDs = try await overrideStorage.fetchForOverridePresets()
-                    debug(.default, "🔄 EXPORT: Found \(overridePresetIDs.count) override preset IDs")
 
                     if !overridePresetIDs.isEmpty {
                         let overridePresets: [ExportSetting] = try await viewContext.perform {
@@ -1036,9 +1075,7 @@ extension SettingsExport {
                                         category: category,
                                         subcategory: presetName,
                                         name: "Target",
-                                        value: trioSettings.units == .mgdL
-                                            ? target.description
-                                            : target.decimalValue.formattedAsMmolL,
+                                        value: String(describing: target.decimalValue.asUnit(trioSettings.units)),
                                         unit: trioSettings.units.rawValue
                                     ))
                                 }
@@ -1132,7 +1169,7 @@ extension SettingsExport {
                         }
 
                         exportSettings.append(contentsOf: overridePresets)
-                        debug(.default, "✅ EXPORT: Added \(overridePresets.count) override preset rows")
+                        debug(.settings, "Exported \(overridePresets.count) override preset rows")
                     }
                 } catch {
                     return .failure(.unknown("Failed to fetch override presets: \(error.localizedDescription)"))
@@ -1145,8 +1182,6 @@ extension SettingsExport {
 
                 // Meal Presets (from Core Data)
                 do {
-                    debug(.default, "Fetching meal presets...")
-
                     let mealPresetData = try await viewContext.perform {
                         let request: NSFetchRequest<MealPresetStored> = MealPresetStored.fetchRequest()
                         let mealPresets = try self.viewContext.fetch(request)
@@ -1161,7 +1196,7 @@ extension SettingsExport {
                         }
                     }
 
-                    debug(.default, "Found \(mealPresetData.count) meal presets")
+                    debug(.settings, "Exporting \(mealPresetData.count) meal presets")
 
                     if !mealPresetData.isEmpty {
                         for mealPreset in mealPresetData {
@@ -1197,7 +1232,7 @@ extension SettingsExport {
                         }
                     }
                 } catch {
-                    debug(.default, "Failed to fetch meal presets: \(error)")
+                    warning(.settings, "Fetching meal presets for export failed", error: error)
                 }
             }
 
@@ -1220,43 +1255,35 @@ extension SettingsExport {
                 }
                 content = csvContent
 
-                debug(
-                    .default,
-                    "📝 EXPORT: Writing .CSV content (\(content.count) characters) to file: \(fileURL.path)"
-                )
-                debug(.default, "📝 EXPORT: Temporary directory: \(FileManager.default.temporaryDirectory.path)")
-                debug(.default, "📝 EXPORT: File URL: \(fileURL)")
+                debug(.settings, "Writing settings export (\(content.count) characters)")
 
                 try content.write(to: fileURL, atomically: true, encoding: .utf8)
-                debug(.default, "✅ EXPORT: Content written to file successfully")
 
                 // Set file attributes for better sharing compatibility
                 try fileManager.setAttributes([
                     .posixPermissions: 0o644,
                     .extensionHidden: false
                 ], ofItemAtPath: fileURL.path)
-                debug(.default, "✅ EXPORT: File attributes set successfully")
 
                 // Verify file was written successfully
                 let fileExists = fileManager.fileExists(atPath: fileURL.path)
                 let fileAttributes = try? fileManager.attributesOfItem(atPath: fileURL.path)
                 let fileSize = (fileAttributes?[.size] as? NSNumber)?.intValue ?? 0
 
-                debug(.default, "📊 EXPORT: File verification - Exists: \(fileExists), Size: \(fileSize) bytes")
-
                 if !fileExists {
-                    debug(.default, "❌ EXPORT: CRITICAL - File does not exist after writing!")
+                    error(.settings, "Settings export file missing after write")
                     return .failure(.unknown("File was not created successfully"))
                 }
 
                 if fileSize == 0 {
-                    debug(.default, "❌ EXPORT: CRITICAL - File exists but has 0 bytes!")
+                    error(.settings, "Settings export file is empty after write")
                     return .failure(.unknown("File was created but is empty"))
                 }
 
+                info(.settings, "Exported settings (\(fileSize) bytes)")
                 return .success(fileURL)
             } catch {
-                debug(.default, "Failed to write settings export file: \(error)")
+                warning(.settings, "Writing settings export file failed", error: error)
                 return .failure(.fileWriteError(error))
             }
         }

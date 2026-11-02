@@ -73,28 +73,21 @@ enum ProfileGenerator {
         preferences: Preferences,
         carbRatios: CarbRatios,
         tempTargets: [TempTarget],
-        model: String,
         clock: Date
     ) throws -> Profile {
-        let model = model.replacingOccurrences(of: "\"", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-
         guard !carbRatios.schedule.isEmpty else {
             throw ProfileError.invalidCarbRatio
         }
 
         var preferences = preferences
-        switch (preferences.curve, preferences.useCustomPeakTime) {
-        case (.rapidActing, true):
-            preferences.insulinPeakTime = max(50, min(preferences.insulinPeakTime, 120))
-        case (.rapidActing, false):
-            preferences.insulinPeakTime = 75
-        case (.ultraRapid, true):
-            preferences.insulinPeakTime = max(35, min(preferences.insulinPeakTime, 100))
-        case (.ultraRapid, false):
-            preferences.insulinPeakTime = 55
-        default:
-            // don't do anything
-            debug(.openAPS, "don't modify insulin peak time")
+        if let peak = IobCalculation.lookupPeak(
+            curve: preferences.curve,
+            useCustomPeakTime: preferences.useCustomPeakTime,
+            insulinPeakTime: preferences.insulinPeakTime
+        ) {
+            preferences.insulinPeakTime = Decimal(peak)
+        } else {
+            debug(.algorithm, "Insulin peak time left unchanged")
         }
 
         return try generateProfile(
@@ -105,7 +98,6 @@ enum ProfileGenerator {
             preferences: preferences,
             carbRatios: carbRatios,
             tempTargets: tempTargets,
-            model: model,
             clock: clock
         )
     }
@@ -119,7 +111,6 @@ enum ProfileGenerator {
         preferences: Preferences,
         carbRatios: CarbRatios,
         tempTargets: [TempTarget],
-        model: String,
         clock: Date
     ) throws -> Profile {
         var profile = Profile() // start with the defaults
@@ -137,7 +128,6 @@ enum ProfileGenerator {
         }
         profile.dia = pumpSettings.insulinActionCurve
 
-        profile.model = model
         profile.skipNeutralTemps = preferences.skipNeutralTemps
 
         profile.currentBasal = try Basal.basalLookup(basalProfile, now: clock)
@@ -205,7 +195,7 @@ enum ProfileGenerator {
         // Error check: profile.sens < 5 in Javascript
         if let sens = profile.sens {
             guard sens >= 5 else {
-                debug(.openAPS, "ISF of \(String(describing: profile.sens)) is not supported")
+                debug(.algorithm, "ISF \(sens) mg/dL/U is below the minimum of 5")
                 throw ProfileError.invalidISF(value: profile.sens)
             }
         }

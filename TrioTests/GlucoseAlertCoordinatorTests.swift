@@ -71,3 +71,53 @@ import Testing
         ))
     }
 }
+
+/// Guards the #1428 invariant: "Use CGM App Alerts" suppression applies to
+/// reading-driven alarms only. A CGM app can alarm on the current reading,
+/// but it cannot compute Trio's oref forecast or carbsReq, so those alarms
+/// must stay armed — which is also what the settings screen shows the user,
+/// since only reading-driven types move into the "Handled by CGM App" section.
+@Suite("Trio Alerts: CGM-ownership suppression scope") struct CGMOwnershipSuppressionScopeTests {
+    @Test("Forecast and carbs-required alarms are not reading-driven") func determinationDrivenTypes() {
+        #expect(!GlucoseAlertType.forecastedLow.isReadingDriven)
+        #expect(!GlucoseAlertType.carbsRequired.isReadingDriven)
+    }
+
+    @Test("Only high/low/urgentLow are reading-driven") func readingDrivenSetIsExact() {
+        let readingDriven = Set(GlucoseAlertType.allCases.filter(\.isReadingDriven))
+        #expect(readingDriven == [.high, .low, .urgentLow])
+    }
+
+    @Test("CGM-owned retraction keeps determination-driven alarms firing") func retractsOnlyReadingDrivenAlarms() {
+        let urgentLow = GlucoseAlert(type: .urgentLow)
+        let low = GlucoseAlert(type: .low)
+        let forecastedLow = GlucoseAlert(type: .forecastedLow)
+        let high = GlucoseAlert(type: .high)
+        let carbsRequired = GlucoseAlert(type: .carbsRequired)
+        let alarms = [urgentLow, low, forecastedLow, high, carbsRequired]
+        let firing = Set(alarms.map(\.id))
+
+        let result = GlucoseAlertCoordinator.alarmsToRetractWhenCGMOwnsAlerts(firing: firing, in: alarms)
+
+        #expect(result.map(\.id) == [urgentLow.id, low.id, high.id])
+        #expect(!result.contains(forecastedLow))
+        #expect(!result.contains(carbsRequired))
+    }
+
+    @Test("CGM-owned retraction skips reading-driven alarms that are not firing") func skipsNonFiringReadingDrivenAlarms() {
+        let low = GlucoseAlert(type: .low)
+        let high = GlucoseAlert(type: .high)
+
+        let result = GlucoseAlertCoordinator.alarmsToRetractWhenCGMOwnsAlerts(firing: [high.id], in: [low, high])
+
+        #expect(result == [high])
+    }
+
+    @Test("CGM-owned retraction with empty firing set returns nothing") func emptyFiringSetReturnsNothing() {
+        let alarms = [GlucoseAlert(type: .urgentLow), GlucoseAlert(type: .low), GlucoseAlert(type: .high)]
+
+        let result = GlucoseAlertCoordinator.alarmsToRetractWhenCGMOwnsAlerts(firing: [], in: alarms)
+
+        #expect(result.isEmpty)
+    }
+}

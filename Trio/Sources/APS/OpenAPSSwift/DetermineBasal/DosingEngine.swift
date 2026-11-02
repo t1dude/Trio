@@ -619,6 +619,14 @@ enum DosingEngine {
         return (shouldSetTempBasal: false, determination: determination)
     }
 
+    /// Basal Testing: past the low-glucose suspend, recommend nothing. Leaves `rate` and
+    /// `duration` unset so no temp is enacted and the history stays scheduled basal.
+    static func recommendNoChange(determination: Determination) -> Determination {
+        var newDetermination = determination
+        newDetermination.reason += "basal testing; no adjustment. "
+        return newDetermination
+    }
+
     /// Handles the case where IOB is greater than the max IOB.
     ///
     /// - Returns: A tuple containing:
@@ -791,7 +799,10 @@ enum DosingEngine {
             durationRequired = min(60, max(0, durationRequired))
         } else {
             // Note: we're using the fully adjusted basal here
-            smbLowTempRequired = (basal * durationRequired / 30).jsRounded(scale: 2)
+            // Intentional deviation from oref JS (basal * durationReq / 30) as that formula is,
+            // inverted, so a longer required suspension gets a higher rate instead of a lower one.
+            // See https://github.com/nightscout/Trio/issues/1359
+            smbLowTempRequired = (basal * (30 - durationRequired) / 30).jsRounded(scale: 2)
             durationRequired = 30
         }
 

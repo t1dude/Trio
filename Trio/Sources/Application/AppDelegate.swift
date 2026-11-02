@@ -3,6 +3,12 @@ import UIKit
 import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNotificationCenterDelegate {
+    /// Assigned by `TrioApp.loadServices()` once the Core Data stack is up.
+    /// Resolving `TelemetryClient` constructs the APS/device graph, whose first
+    /// pump/CGM save crashes if the persistent stores are not loaded yet — so
+    /// this delegate never resolves it, and pre-init foreground transitions no-op.
+    var telemetry: TelemetryClient?
+
     func application(
         _: UIApplication,
         didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]?
@@ -13,28 +19,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNoti
         let crashReportingEnabled: Bool = PropertyPersistentFlags.shared.crashlyticsSharingEnabled ?? true
         CrashReportingGate.configureAtLaunch(enabled: crashReportingEnabled)
 
-        // Telemetry: record this cold launch into the sliding 7-day window,
-        // then drive cadence via three layered triggers — listed below in
-        // priority of reliability:
-        //
-        //   1. SHA-change ping: build updated since last send. Awaited so
-        //      the lastSentAt stamp is fresh before the overdue check.
-        //   2. checkAndSendIfOverdue: covers the regular cold launch on the
-        //      same build when >24h has passed since the last successful
-        //      send. Together with the foreground-transition hook below
-        //      (`applicationWillEnterForeground`), this keeps daily pings
-        //      flowing on iOS.
-        //   3. scheduleRecurring: best-effort fallback for the rare case
-        //      where the app stays foregrounded for a full 24h.
-        TelemetryClient.shared.recordColdLaunch()
-        Task.detached {
-            if TelemetryClient.shared.buildShaChangedSinceLastSend() {
-                await TelemetryClient.shared.maybeSend()
-            }
-            TelemetryClient.shared.scheduleRecurring()
-            TelemetryClient.shared.checkAndSendIfOverdue()
-        }
-
         return true
     }
 
@@ -43,7 +27,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNoti
     /// since `scheduleRecurring`'s GCD timer doesn't fire while suspended.
     /// No-op if a send already landed within the last 24h.
     func applicationWillEnterForeground(_: UIApplication) {
-        TelemetryClient.shared.checkAndSendIfOverdue()
+        telemetry?.checkAndSendIfOverdue(reason: .foreground)
     }
 
     func application(
@@ -51,7 +35,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNoti
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
-        debug(.remoteControl, "Received notification")
+        debug(.remote, "Received remote notification")
 
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: userInfo)
@@ -62,15 +46,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNoti
                     try await TrioRemoteControl.shared.handleRemoteNotification(encryptedData: encryptedMessage.encryptedData)
                     completionHandler(.newData)
                 } catch {
-                    debug(
-                        .default,
-                        "\(DebuggingIdentifiers.failed) failed to handle remote notification with error: \(error)"
-                    )
+                    warning(.remote, "Handling remote notification failed", error: error)
                     completionHandler(.failed)
                 }
             }
         } catch {
-            debug(.remoteControl, "Error decoding push message shell: \(error)")
+            warning(.remote, "Decoding remote notification failed", error: error)
             completionHandler(.failed)
         }
     }
@@ -86,10 +67,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNoti
             do {
                 try await TrioRemoteControl.shared.handleAPNSChanges(deviceToken: token)
             } catch {
-                debug(
-                    .remoteControl,
-                    "\(DebuggingIdentifiers.failed) failed to register for remote notifications: \(error)"
-                )
+                warning(.remote, "Updating the push token failed", error: error)
             }
         }
     }
@@ -98,6 +76,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject, UNUserNoti
         _: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        debug(.remoteControl, "Failed to register for remote notifications: \(error)")
+        warning(.remote, "Registering for remote notifications failed", error: error)
     }
 }

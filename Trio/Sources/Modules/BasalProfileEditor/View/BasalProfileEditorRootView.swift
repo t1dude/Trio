@@ -79,6 +79,8 @@ extension BasalProfileEditor {
                     AxisGridLine(centered: true, stroke: StrokeStyle(lineWidth: 1, dash: [2, 4]))
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Basal rate profile chart, 24 hours"))
         }
 
         var saveButton: some View {
@@ -86,11 +88,12 @@ extension BasalProfileEditor {
                 let shouldDisableButton = state.syncInProgress || state.items.isEmpty || !state.hasChanges
 
                 Rectangle()
-                    .frame(width: UIScreen.main.bounds.width, height: 65)
+                    .frame(height: 65)
                     .foregroundStyle(colorScheme == .dark ? Color.bgDarkerDarkBlue : Color.white)
                     .background(.thinMaterial)
                     .opacity(0.8)
                     .clipShape(Rectangle())
+                    .ignoresSafeArea(edges: .horizontal)
 
                 Group {
                     HStack {
@@ -105,10 +108,11 @@ extension BasalProfileEditor {
                                 }
                                 Text(state.syncInProgress ? "Saving..." : "Save")
                             }
-                            .frame(width: UIScreen.main.bounds.width * 0.9, alignment: .center)
+                            .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
                             .padding(10)
                         })
-                            .frame(width: UIScreen.main.bounds.width * 0.9, height: 40, alignment: .center)
+                            .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
+                            .frame(height: 40)
                             .disabled(shouldDisableButton)
                             .background(shouldDisableButton ? Color(.systemGray4) : Color(.systemBlue))
                             .tint(.white)

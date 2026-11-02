@@ -3,22 +3,22 @@ import Foundation
 import Swinject
 
 class TrioRemoteControl: Injectable {
-    static let shared = TrioRemoteControl()
+    // Container-scoped singleton; shared is a convenience accessor for APNS/App Intents entry points
+    static var shared: TrioRemoteControl { TrioApp.resolver.resolve(TrioRemoteControl.self)! }
 
     @Injected() internal var tempTargetsStorage: TempTargetsStorage!
     @Injected() internal var carbsStorage: CarbsStorage!
     @Injected() internal var nightscoutManager: NightscoutManager!
-    @Injected() internal var overrideStorage: OverrideStorage!
+    @Injected() internal var adjustmentManager: AdjustmentManager!
     @Injected() internal var settings: SettingsManager!
     @Injected() internal var bolusSafetyValidator: BolusSafetyValidator!
+    @Injected() internal var carbEntryMutationService: CarbEntryMutationService!
+    @Injected() internal var apsManager: APSManager!
 
     private let timeWindow: TimeInterval = 600
 
-    internal let viewContext: NSManagedObjectContext
-
-    private init() {
-        viewContext = CoreDataStack.shared.persistentContainer.viewContext
-        injectServices(TrioApp.resolver)
+    init(resolver: Resolver) {
+        injectServices(resolver)
     }
 
     func handleRemoteNotification(encryptedData: String) async throws {
@@ -55,21 +55,20 @@ class TrioRemoteControl: Injectable {
         if timeDifference > timeWindow {
             await logError(
                 "Command rejected: the message is too old (sent \(Int(timeDifference)) seconds ago).",
-                payload: commandPayload
+                payload: commandPayload,
+                ack: RemoteCommandAck(commandId: commandPayload.commandId, mealId: commandPayload.mealId, result: .rejected)
             )
             return
         } else if timeDifference < -timeWindow {
             await logError(
                 "Command rejected: the message has an invalid future timestamp.",
-                payload: commandPayload
+                payload: commandPayload,
+                ack: RemoteCommandAck(commandId: commandPayload.commandId, mealId: commandPayload.mealId, result: .rejected)
             )
             return
         }
 
-        debug(
-            .remoteControl,
-            "Command successfully decrypted and authenticated. Time difference: \(Int(timeDifference)) seconds."
-        )
+        debug(.remote, "Command authenticated, sent \(Int(timeDifference)) s ago")
 
         switch commandPayload.commandType {
         case .bolus:
@@ -84,6 +83,16 @@ class TrioRemoteControl: Injectable {
             await handleStartOverrideCommand(commandPayload)
         case .cancelOverride:
             await handleCancelOverrideCommand(commandPayload)
+        case .deleteMeal:
+            try await handleDeleteMealCommand(commandPayload)
+        case .editMeal:
+            try await handleEditMealCommand(commandPayload)
+        case .unknown:
+            await logError(
+                "Command rejected: unsupported command type.",
+                payload: commandPayload,
+                ack: RemoteCommandAck(commandId: commandPayload.commandId, mealId: commandPayload.mealId, result: .rejected)
+            )
         }
     }
 }

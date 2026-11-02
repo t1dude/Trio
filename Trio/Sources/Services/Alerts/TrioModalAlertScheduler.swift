@@ -14,6 +14,10 @@ protocol TrioModalAlertResponder: AnyObject {
     /// `.delayed` timers to skip stale fires after the app resumes from
     /// suspension — the timer fires immediately on resume, and without this
     /// gate a banner would appear for an already-retracted alert.
+    /// A `.delayed`/`.repeating` alert's timer just fired and the alert is
+    /// genuinely live (not stale, not snoozed). The manager starts the
+    /// audible channel here — at arm time it would fire 20 minutes early.
+    func alertDidFire(_ alert: LoopKit.Alert)
     func isAlertActive(identifier: LoopKit.Alert.Identifier) -> Bool
     /// True if a global snooze is active. Non-critical `.delayed`/`.repeating`
     /// banners check this at fire time so a previously-scheduled banner
@@ -149,6 +153,7 @@ final class TrioModalAlertScheduler: ObservableObject {
                     }
                 case .insert:
                     self.insert(alert)
+                    self.responder?.alertDidFire(alert)
                     if !repeats {
                         self.pending.removeValue(forKey: alert.identifier)
                     }
@@ -197,7 +202,7 @@ struct TrioAlertBanner: View {
     @State private var presentedAt = Date()
     @State private var dragOffset: CGSize = .zero
 
-    private static let quickSnooze: TimeInterval = 15 * 60
+    private static let quickSnooze: TimeInterval = BaseTrioAlertManager.quickSnooze
 
     /// Critical alerts and urgent-low glucose alarms are limited to the
     /// 15-minute quick snooze — the safety floor. Other alerts get the full
@@ -390,7 +395,7 @@ struct TrioAlertModifier: ViewModifier {
         HStack {
             Spacer()
             Button {
-                scheduler.snoozeAll(duration: 15 * 60)
+                scheduler.snoozeAll(duration: BaseTrioAlertManager.quickSnooze)
             } label: {
                 HStack(spacing: 4) {
                     Text(String(localized: "Snooze all (15 min)"))

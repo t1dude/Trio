@@ -34,9 +34,6 @@ import Testing
             ("Medtrum", "com.nightscout.medtrumkit.patch-occlusion"), // single-s (future MedtrumKit)
             ("Medtrum", "com.nightscout.medtrumkit.patch-fault"),
             ("Medtrum", "com.nightscout.medtrumkit.patch-empty"),
-            ("LibreLoopCGMManager", "sensorExpiry.warning2h"),
-            ("LibreLoopCGMManager", "sensorExpiry.sessionEnded"),
-            ("LibreLoopCGMManager", "sensorAttention"),
             ("trio.aps", "loop.notActive")
         ]
     ) func criticalEntries(manager: String, alertID: String) {
@@ -56,6 +53,22 @@ import Testing
             ("Medtrum", "com.nightscout.medtrumkit.patch-daily-limit"),
             ("LibreLoopCGMManager", "sensorExpiry.warning24h"),
             ("LibreLoopCGMManager", "reconnectNeedsReScan"),
+            // No LibreLoop alert is .critical: a sensor ending or needing a
+            // re-scan pauses CGM, it doesn't dose. Keeps them snoozeable.
+            ("LibreLoopCGMManager", "sensorExpiry.warning2h"),
+            ("LibreLoopCGMManager", "sensorExpiry.sessionEnded"),
+            ("LibreLoopCGMManager", "sensorAttention"),
+            // G7 matches LibreLoop row for row: every CGM lifecycle alert is
+            // .timeSensitive. Not .critical — once readings stop,
+            // loop.notActive escalates on its own; and not .active, the same
+            // escalation the catalog applies to LibreLoop's 24h warning.
+            ("G7CGMManager", "sensorExpiringSoon"),
+            ("G7CGMManager", "sensorExpiringImminently"),
+            ("G7CGMManager", "sensorFailed"),
+            ("G7CGMManager", "sensorExpired"),
+            ("G7CGMManager", "sessionEnded"),
+            ("G7CGMManager", "connectionRefused"),
+            ("G7CGMManager", "signalLoss"),
             ("trio.aps", "glucoseDataStale")
         ]
     ) func timeSensitiveEntries(manager: String, alertID: String) {
@@ -160,6 +173,55 @@ import Testing
 
     @Test("LibreLoop reconnect is categorized under Connectivity") func libreLoopConnectivityCategory() {
         #expect(AlertCatalogRegistry.lookup(id("LibreLoopCGMManager", "reconnectNeedsReScan"))?.category == "Connectivity")
+    }
+
+    // MARK: - I2: Dexcom G7 lifecycle entries
+
+    /// The plugin issues these without a sound, so a missing entry is what
+    /// turns a sensor alert into a silent banner. The catalog is the tier
+    /// source, so these levels — not the plugin's own — are what the user
+    /// gets, and they must stay equal to the LibreLoop rows above.
+    @Test(
+        "G7 lifecycle entries map to CGM-side concepts",
+        arguments: [
+            ("sensorExpiringSoon", Alert.CatalogConcept.cgmExpiringSoon),
+            ("sensorExpiringImminently", Alert.CatalogConcept.cgmExpiringSoon),
+            ("sensorExpired", Alert.CatalogConcept.cgmExpired),
+            ("sessionEnded", Alert.CatalogConcept.cgmExpired),
+            ("sensorFailed", Alert.CatalogConcept.cgmReplacementNeeded),
+            ("connectionRefused", Alert.CatalogConcept.cgmReconnectNeeded),
+            ("signalLoss", Alert.CatalogConcept.cgmReconnectNeeded)
+        ]
+    ) func g7Concepts(alertID: String, expected: Alert.CatalogConcept) {
+        #expect(AlertCatalogRegistry.lookup(id("G7CGMManager", alertID))?.concept == expected)
+    }
+
+    @Test(
+        "G7 lifecycle entries are categorized Sensor or Connectivity",
+        arguments: [
+            ("sensorExpiringSoon", "Sensor"),
+            ("sensorExpiringImminently", "Sensor"),
+            ("sensorExpired", "Sensor"),
+            ("sessionEnded", "Sensor"),
+            ("sensorFailed", "Sensor"),
+            ("connectionRefused", "Connectivity"),
+            ("signalLoss", "Connectivity")
+        ]
+    ) func g7Categories(alertID: String, expected: String) {
+        #expect(AlertCatalogRegistry.lookup(id("G7CGMManager", alertID))?.category == expected)
+    }
+
+    /// Every case of `G7LifecycleAlert` is catalogued. The raw values are
+    /// duplicated here because the enum is internal to the plugin; if one is
+    /// renamed upstream this fails rather than going quietly silent.
+    @Test("every G7 lifecycle alert has an entry") func g7EntriesAreComplete() {
+        let allCases = [
+            "sensorExpiringSoon", "sensorExpiringImminently", "sensorExpired",
+            "sessionEnded", "sensorFailed", "signalLoss", "connectionRefused"
+        ]
+        for alertID in allCases {
+            #expect(AlertCatalogRegistry.lookup(id("G7CGMManager", alertID)) != nil)
+        }
     }
 
     // MARK: - J: Trio-internal Algorithm entries

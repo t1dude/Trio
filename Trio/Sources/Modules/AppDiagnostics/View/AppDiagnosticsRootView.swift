@@ -44,6 +44,12 @@ extension AppDiagnostics {
                                     .cornerRadius(10)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(Text(option.displayName))
+                                .accessibilityValue(Text(option.caption))
+                                .accessibilityAddTraits(
+                                    state.diagnosticsSharingOption == option ? [.isButton, .isSelected] : .isButton
+                                )
                             }
                             .padding()
                         }
@@ -103,7 +109,7 @@ extension AppDiagnostics {
                         if let url = URL(string: "https://github.com/nightscout/Trio/blob/dev/PRIVACY_POLICY.md") {
                             openURL(url)
                         } else {
-                            debug(.default, "Invalid URL! Could not gracefully unwrap privacy policy link!")
+                            fault(.ui, "Privacy policy URL is invalid")
                         }
                     }
                 }

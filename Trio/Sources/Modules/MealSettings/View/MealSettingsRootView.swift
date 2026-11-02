@@ -20,26 +20,6 @@ extension MealSettings {
         @Environment(\.colorScheme) var colorScheme
         @Environment(AppState.self) var appState
 
-        private var conversionFormatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = 1
-
-            return formatter
-        }
-
-        private var intFormater: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.allowsFloats = false
-            return formatter
-        }
-
-        private var formatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            return formatter
-        }
-
         var body: some View {
             List {
                 Section(
@@ -59,9 +39,18 @@ extension MealSettings {
                                         Text(" g").foregroundColor(.secondary)
                                     }
                                 }
+                                .contentShape(Rectangle())
                                 .onTapGesture {
                                     displayPickerMaxCarbs.toggle()
                                 }
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(Text("Max Carbs"))
+                                .accessibilityValue(Text(
+                                    state.maxCarbs.description + " "
+                                        + String(localized: "grams", comment: "Gram unit, spoken")
+                                ))
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityAction { displayPickerMaxCarbs.toggle() }
                             }.padding(.top)
 
                             if displayPickerMaxCarbs {
@@ -92,9 +81,18 @@ extension MealSettings {
                                             Text(" g").foregroundColor(.secondary)
                                         }
                                     }
+                                    .contentShape(Rectangle())
                                     .onTapGesture {
                                         displayPickerMaxFat.toggle()
                                     }
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(Text("Max Fat"))
+                                    .accessibilityValue(Text(
+                                        state.maxFat.description + " "
+                                            + String(localized: "grams", comment: "Gram unit, spoken")
+                                    ))
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityAction { displayPickerMaxFat.toggle() }
                                 }
                                 .padding(.top)
 
@@ -125,9 +123,18 @@ extension MealSettings {
                                             Text(" g").foregroundColor(.secondary)
                                         }
                                     }
+                                    .contentShape(Rectangle())
                                     .onTapGesture {
                                         displayPickerMaxProtein.toggle()
                                     }
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(Text("Max Protein"))
+                                    .accessibilityValue(Text(
+                                        state.maxProtein.description + " "
+                                            + String(localized: "grams", comment: "Gram unit, spoken")
+                                    ))
+                                    .accessibilityAddTraits(.isButton)
+                                    .accessibilityAction { displayPickerMaxProtein.toggle() }
                                 }
                                 .padding(.top)
 
@@ -153,6 +160,8 @@ extension MealSettings {
                                 .lineLimit(nil)
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
 
                                 Spacer()
                                 Button(
@@ -173,7 +182,7 @@ extension MealSettings {
                                     },
                                     label: {
                                         HStack {
-                                            Image(systemName: "questionmark.circle")
+                                            Image(systemName: "questionmark.circle").accessibilityLabel(Text("More information"))
                                         }
                                     }
                                 ).buttonStyle(BorderlessButtonStyle())

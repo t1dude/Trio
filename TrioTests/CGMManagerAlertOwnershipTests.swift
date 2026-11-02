@@ -23,8 +23,8 @@ import Testing
         #expect(CGMManagerAlertOwnership.providesOwnGlucoseAlerts(manager: nil, sourceType: .xdrip))
     }
 
-    @Test("nightscout / simulator / enlite sources → no owner") func nonOwnerSources() {
-        for source in [CGMType.nightscout, .simulator, .enlite] {
+    @Test("nightscout / simulator sources → no owner") func nonOwnerSources() {
+        for source in [CGMType.nightscout, .simulator] {
             #expect(CGMManagerAlertOwnership.owningApp(manager: nil, sourceType: source) == nil)
         }
     }
@@ -43,6 +43,12 @@ import Testing
         let app = CGMManagerAlertOwnership.owningApp(manager: G7CGMManager(), sourceType: .plugin)
         #expect(app?.name == "Dexcom G7 / One+")
         #expect(app?.deepLink == URL(string: "dexcomg7://"))
+    }
+
+    @Test("G7CGMManager paired directly owns no alerting app") func g7DirectMapping() {
+        let manager = G7CGMManager(sessionMode: .direct)
+        #expect(CGMManagerAlertOwnership.owningApp(manager: manager, sourceType: .plugin) == nil)
+        #expect(!CGMManagerAlertOwnership.providesOwnGlucoseAlerts(manager: manager, sourceType: .plugin))
     }
 
     @Test("G5CGMManager → Dexcom G5, no known deep link") func g5Mapping() {

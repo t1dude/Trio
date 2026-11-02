@@ -62,6 +62,14 @@ extension AutosensSettings {
                     .useNewFormula ? Text("Autosens") : Text("Dynamic Sensitivity")
             ) {
                 VStack {
+                    if state.settingsManager.settings.dosingMode == .basalTesting {
+                        DosingModeOverrideNote(
+                            mode: .basalTesting,
+                            message: String(localized: "Trio is holding sensitivity at 100% and ignoring these settings.")
+                        )
+                        .padding(.bottom, 8)
+                    }
+
                     let dynamicRatio = state.determinationsFromPersistence.first?.sensitivityRatio
                     let dynamicISF = state.determinationsFromPersistence.first?.insulinSensitivity
                     let newISF = state.autosensISF
@@ -78,17 +86,10 @@ extension AutosensSettings {
                     HStack {
                         Text("Calculated Sensitivity")
                         Spacer()
-                        if state.units == .mgdL {
-                            Text(
-                                !state.settingsManager.preferences
-                                    .useNewFormula ? newISF!.description : (dynamicISF ?? 0).description
-                            )
-                        } else {
-                            Text((
-                                !state.settingsManager.preferences
-                                    .useNewFormula ? newISF!.formattedAsMmolL : dynamicISF?.decimalValue.formattedAsMmolL
-                            ) ?? "0")
-                        }
+                        Text(
+                            (!state.settingsManager.preferences.useNewFormula ? newISF! : dynamicISF?.decimalValue ?? 0)
+                                .formattedISF(for: state.units)
+                        )
                         Text(state.units.rawValue + "/U").foregroundColor(.secondary)
                     }
 
@@ -99,6 +100,8 @@ extension AutosensSettings {
                         .font(.footnote)
                         .foregroundColor(.secondary)
                         .lineLimit(nil)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                         Spacer()
                         Button(
                             action: {
@@ -108,7 +111,7 @@ extension AutosensSettings {
                             },
                             label: {
                                 HStack {
-                                    Image(systemName: "questionmark.circle")
+                                    Image(systemName: "questionmark.circle").accessibilityLabel(Text("More information"))
                                 }
                             }
                         ).buttonStyle(BorderlessButtonStyle())

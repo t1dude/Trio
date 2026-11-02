@@ -130,15 +130,16 @@ extension CGMSettings {
                 }
                 .scrollContentBackground(.hidden)
                 .background(appState.trioBackgroundColor(for: colorScheme))
-                .confirmationDialog("Delete CGM", isPresented: $shouldDisplayDeletionConfirmation) {
-                    Button(role: .destructive) {
-                        deleteCGM()
-                    } label: {
-                        Text("Delete \(cgmCurrent.displayName)")
-                            .font(.headline)
-                            .tint(.red)
-                    }
-                } message: { Text("Are you sure you want to delete \(cgmCurrent.displayName)?") }
+                .glassActionSheet(
+                    "Delete CGM",
+                    message: Text("Are you sure you want to delete \(cgmCurrent.displayName)?"),
+                    isPresented: $shouldDisplayDeletionConfirmation,
+                    actions: [
+                        GlassSheetAction("Delete \(cgmCurrent.displayName)", role: .destructive) {
+                            deleteCGM()
+                        }
+                    ]
+                )
                 .onAppear {
                     if cgmCurrent.type == .simulator {
                         initializeSimulatorSettings()
@@ -325,7 +326,7 @@ extension CGMSettings {
 
                                 Spacer()
 
-                                Text(state.units == .mgdL ? centerValue.description : centerValue.formattedAsMmolL).bold()
+                                Text(centerValue.formatted(for: state.units)).bold()
 
                                 Text(state.units.rawValue).foregroundStyle(Color.secondary)
                             }.padding(.top)
@@ -353,7 +354,7 @@ extension CGMSettings {
                                 Spacer()
 
                                 Text("±")
-                                Text(state.units == .mgdL ? amplitude.description : amplitude.formattedAsMmolL).bold()
+                                Text(amplitude.formatted(for: state.units)).bold()
 
                                 Text(state.units.rawValue).foregroundStyle(Color.secondary)
                             }.padding(.top)
@@ -366,7 +367,7 @@ extension CGMSettings {
                                 .padding(.vertical)
 
                             Text(
-                                "Range: \(state.units == .mgdL ? (centerValue - amplitude).description : (centerValue - amplitude).formattedAsMmolL)–\(state.units == .mgdL ? (centerValue + amplitude).description : (centerValue + amplitude).formattedAsMmolL) \(state.units.rawValue)"
+                                "Range: \((centerValue - amplitude).formatted(for: state.units))–\((centerValue + amplitude).formatted(for: state.units)) \(state.units.rawValue)"
                             )
                             .bold()
                             .font(.footnote)
@@ -417,7 +418,7 @@ extension CGMSettings {
 
                                 Text("±")
 
-                                Text(state.units == .mgdL ? noiseAmplitude.description : noiseAmplitude.formattedAsMmolL).bold()
+                                Text(noiseAmplitude.formatted(for: state.units)).bold()
 
                                 Text(state.units.rawValue).foregroundStyle(Color.secondary)
                             }.padding(.top)
@@ -452,7 +453,7 @@ extension CGMSettings {
                     })
                         .frame(maxWidth: .infinity, alignment: .center)
                         .tint(.white)
-                }.listRowBackground(Color.accentColor)
+                }.listRowBackground(Color(.systemBlue))
 
             }.listSectionSpacing(sectionSpacing)
         }
@@ -460,12 +461,13 @@ extension CGMSettings {
         var stickyDeleteButton: some View {
             ZStack {
                 Rectangle()
-                    .frame(width: UIScreen.main.bounds.width, height: 120)
+                    .frame(height: 120)
                     .foregroundStyle(colorScheme == .dark ? Color.bgDarkerDarkBlue : Color.white)
                     .background(.thinMaterial)
                     .opacity(0.8)
                     .clipShape(Rectangle())
                     .padding(.bottom, -55)
+                    .ignoresSafeArea(edges: .horizontal)
 
                 Button(action: {
                     shouldDisplayDeletionConfirmation.toggle()
@@ -474,7 +476,8 @@ extension CGMSettings {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .padding(10)
                 })
-                    .frame(width: UIScreen.main.bounds.width * 0.9, height: 40, alignment: .center)
+                    .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
+                    .frame(height: 40)
                     .background(Color(.systemRed))
                     .tint(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 8))

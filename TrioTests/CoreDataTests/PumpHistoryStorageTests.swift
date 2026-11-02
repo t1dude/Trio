@@ -59,6 +59,7 @@ import Testing
                     startDate: date,
                     value: 0.5,
                     unit: .units,
+                    decisionId: nil,
                     deliveredUnits: nil,
                     description: nil,
                     syncIdentifier: nil,
@@ -75,7 +76,7 @@ import Testing
         ]
 
         // Store test event
-        try await storage.storePumpEvents(events)
+        try await storage.storePumpEvents(events, replacePendingEvents: false)
 
         // When - Fetch events with our generic fetch function
         let fetchedEvents = try await coreDataStack.fetchEntitiesAsync(
@@ -146,6 +147,7 @@ import Testing
                     startDate: tenMinAgo,
                     value: 0.4,
                     unit: .units,
+                    decisionId: nil,
                     deliveredUnits: nil,
                     description: nil,
                     syncIdentifier: nil,
@@ -168,6 +170,7 @@ import Testing
                     endDate: halfHourInFuture,
                     value: 1.2,
                     unit: .unitsPerHour,
+                    decisionId: nil,
                     deliveredUnits: nil,
                     description: nil,
                     syncIdentifier: nil,
@@ -185,7 +188,7 @@ import Testing
 
         // When
         // Store in our in-memory PumphistoryStorage
-        try await storage.storePumpEvents(events)
+        try await storage.storePumpEvents(events, replacePendingEvents: false)
 
         // Then
         // Fetch all events after storing
@@ -238,6 +241,7 @@ import Testing
                     startDate: date,
                     value: 4,
                     unit: .units,
+                    decisionId: nil,
                     deliveredUnits: nil,
                     description: nil,
                     syncIdentifier: nil,
@@ -254,7 +258,7 @@ import Testing
         ]
 
         // Store test event and wait for storage to complete the task
-        try await storage.storePumpEvents(events)
+        try await storage.storePumpEvents(events, replacePendingEvents: false)
 
         // When - Fetch events with our generic fetch function
         let fetchedEvents = try await coreDataStack.fetchEntitiesAsync(
@@ -332,7 +336,7 @@ import Testing
 
         // When
         // Store in our in-memory PumphistoryStorage
-        try await storage.storePumpEvents(events)
+        try await storage.storePumpEvents(events, replacePendingEvents: false)
 
         // Then
         // Fetch all events after storing

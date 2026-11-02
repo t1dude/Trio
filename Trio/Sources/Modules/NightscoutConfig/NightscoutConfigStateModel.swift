@@ -29,6 +29,7 @@ extension NightscoutConfig {
         @Published var isUploadEnabled = false // Allow uploads
         @Published var isDownloadEnabled = false // Allow downloads
         @Published var uploadGlucose = true // Upload Glucose
+        @Published var uploadCGMSensorStates = false // Upload CGM Sensor States
         @Published var useLocalSource = false
         @Published var localPort: Decimal = 0
         @Published var units: GlucoseUnits = .mgdL
@@ -50,6 +51,7 @@ extension NightscoutConfig {
             subscribeSetting(\.useLocalGlucoseSource, on: $useLocalSource) { useLocalSource = $0 }
             subscribeSetting(\.localGlucosePort, on: $localPort.map(Int.init)) { localPort = Decimal($0) }
             subscribeSetting(\.uploadGlucose, on: $uploadGlucose, initial: { uploadGlucose = $0 })
+            subscribeSetting(\.uploadCGMSensorStates, on: $uploadCGMSensorStates) { uploadCGMSensorStates = $0 }
 
             isConnectedToNS = nightscoutAPI != nil
 
@@ -59,19 +61,16 @@ extension NightscoutConfig {
                 .sink { [weak self] enabled in
                     guard let self = self else { return }
                     if enabled {
-                        debug(.nightscout, "Upload has been enabled by the user.")
+                        info(.nightscout, "Upload enabled")
                         Task {
                             do {
                                 try await self.nightscoutManager.uploadProfiles()
                             } catch {
-                                debug(
-                                    .default,
-                                    "\(DebuggingIdentifiers.failed) failed to upload profiles: \(error)"
-                                )
+                                warning(.nightscout, "Profile upload failed", error: error)
                             }
                         }
                     } else {
-                        debug(.nightscout, "Upload has been disabled by the user.")
+                        info(.nightscout, "Upload disabled")
                     }
                 }
                 .store(in: &lifetime)
@@ -155,14 +154,14 @@ extension NightscoutConfig {
                         await self.healthKitManager.uploadGlucose()
                     }
                 } catch let error as CoreDataError {
-                    debug(.nightscout, "Core Data error while storing backfilled glucose: \(error)")
+                    warning(.storage, "Failed to store backfilled glucose", error: error)
                     message = "Error: \(error.localizedDescription)"
                 } catch {
-                    debug(.nightscout, "Unexpected error while storing backfilled glucose: \(error)")
+                    warning(.storage, "Failed to store backfilled glucose", error: error)
                     message = "Error: \(error.localizedDescription)"
                 }
             } else {
-                debug(.nightscout, "No glucose values found or fetched to backfill.")
+                debug(.nightscout, "No glucose to backfill")
             }
 
             await MainActor.run {

@@ -56,16 +56,20 @@ final class BaseContactImageStorage: ContactImageStorage, Injectable {
                         ringWidth: ContactImageEntry.RingWidth(rawValue: Int(entry.ringWidth)) ?? .regular,
                         ringGap: ContactImageEntry.RingGap(rawValue: Int(entry.ringGap)) ?? .small,
                         colorMode: ContactImageEntry.ColorMode(rawValue: entry.colorMode ?? "Color") ?? .color,
+                        backgroundMode: ContactImageEntry
+                            .BackgroundMode(rawValue: entry.backgroundMode ?? "transparent") ?? .transparent,
                         fontSize: ContactImageEntry.FontSize(rawValue: Int(entry.fontSize)) ?? .regular,
                         secondaryFontSize: ContactImageEntry.FontSize(rawValue: Int(entry.fontSizeSecondary)) ?? .small,
                         fontWeight: Font.Weight.fromString(entry.fontWeight ?? "regular"),
                         fontWidth: Font.Width.fromString(entry.fontWidth ?? "standard"),
+                        bobbleShowMinutesAgo: entry.bobbleShowMinutesAgo,
+                        bobbleShowDelta: entry.bobbleShowDelta,
                         managedObjectID: entry.objectID
                     )
                 }
             }
         } catch {
-            debug(.default, "\(DebuggingIdentifiers.failed) Error fetching contact image entries: \(error)")
+            warning(.storage, "Fetching contact image entries failed", error: error)
             return []
         }
     }
@@ -95,18 +99,19 @@ final class BaseContactImageStorage: ContactImageStorage, Injectable {
             newContactImageEntry.ringWidth = Int16(contactImageEntry.ringWidth.rawValue)
             newContactImageEntry.ringGap = Int16(contactImageEntry.ringGap.rawValue)
             newContactImageEntry.colorMode = contactImageEntry.colorMode.rawValue
+            newContactImageEntry.backgroundMode = contactImageEntry.backgroundMode.rawValue
             newContactImageEntry.fontSize = Int16(contactImageEntry.fontSize.rawValue)
             newContactImageEntry.fontSizeSecondary = Int16(contactImageEntry.secondaryFontSize.rawValue)
             newContactImageEntry.fontWidth = contactImageEntry.fontWidth.asString
             newContactImageEntry.fontWeight = contactImageEntry.fontWeight.asString
+            newContactImageEntry.bobbleShowMinutesAgo = contactImageEntry.bobbleShowMinutesAgo
+            newContactImageEntry.bobbleShowDelta = contactImageEntry.bobbleShowDelta
 
             do {
                 guard context.hasChanges else { return }
                 try context.save()
             } catch let error as NSError {
-                debugPrint(
-                    "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to save Contact Trick Entry to Core Data with error: \(error.userInfo)"
-                )
+                warning(.storage, "Saving contact image entry failed", error: error)
             }
         }
     }
@@ -138,22 +143,21 @@ final class BaseContactImageStorage: ContactImageStorage, Injectable {
                     existingEntry.ringWidth = Int16(contactImageEntry.ringWidth.rawValue)
                     existingEntry.ringGap = Int16(contactImageEntry.ringGap.rawValue)
                     existingEntry.colorMode = contactImageEntry.colorMode.rawValue
+                    existingEntry.backgroundMode = contactImageEntry.backgroundMode.rawValue
                     existingEntry.fontSize = Int16(contactImageEntry.fontSize.rawValue)
                     existingEntry.fontSizeSecondary = Int16(contactImageEntry.secondaryFontSize.rawValue)
                     existingEntry.fontWeight = contactImageEntry.fontWeight.asString
                     existingEntry.fontWidth = contactImageEntry.fontWidth.asString
+                    existingEntry.bobbleShowMinutesAgo = contactImageEntry.bobbleShowMinutesAgo
+                    existingEntry.bobbleShowDelta = contactImageEntry.bobbleShowDelta
 
                     guard context.hasChanges else { return }
                     try context.save()
                 } else {
-                    debugPrint(
-                        "\(DebuggingIdentifiers.failed) \(#file) \(#function) No matching Contact Trick Entry found to update."
-                    )
+                    warning(.storage, "Contact image entry to update not found")
                 }
             } catch let error as NSError {
-                debugPrint(
-                    "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to update Contact Trick Entry with error: \(error.userInfo)"
-                )
+                warning(.storage, "Updating contact image entry failed", error: error)
             }
         }
     }

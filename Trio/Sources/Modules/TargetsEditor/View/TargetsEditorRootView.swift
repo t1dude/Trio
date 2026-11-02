@@ -13,23 +13,17 @@ extension TargetsEditor {
         @Environment(\.colorScheme) var colorScheme
         @Environment(AppState.self) var appState
 
-        private var numberFormatter: NumberFormatter {
-            let formatter = NumberFormatter()
-            formatter.numberStyle = .decimal
-            formatter.maximumFractionDigits = state.units == .mmolL ? 1 : 0
-            return formatter
-        }
-
         var saveButton: some View {
             ZStack {
                 let shouldDisableButton = state.shouldDisplaySaving || state.items.isEmpty || !state.hasChanges
 
                 Rectangle()
-                    .frame(width: UIScreen.main.bounds.width, height: 65)
+                    .frame(height: 65)
                     .foregroundStyle(colorScheme == .dark ? Color.bgDarkerDarkBlue : Color.white)
                     .background(.thinMaterial)
                     .opacity(0.8)
                     .clipShape(Rectangle())
+                    .ignoresSafeArea(edges: .horizontal)
 
                 Group {
                     HStack {
@@ -49,10 +43,11 @@ extension TargetsEditor {
                                 }
                                 Text(state.shouldDisplaySaving ? "Saving..." : "Save")
                             }
-                            .frame(width: UIScreen.main.bounds.width * 0.9, alignment: .center)
+                            .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
                             .padding(10)
                         })
-                            .frame(width: UIScreen.main.bounds.width * 0.9, height: 40, alignment: .center)
+                            .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
+                            .frame(height: 40)
                             .disabled(shouldDisableButton)
                             .background(shouldDisableButton ? Color(.systemGray4) : Color(.systemBlue))
                             .tint(.white)
@@ -183,6 +178,8 @@ extension TargetsEditor {
                 domain: (state.units == .mgdL ? Decimal(72) : Decimal(72).asMmolL) ...
                     (state.units == .mgdL ? Decimal(180) : Decimal(180).asMmolL)
             )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Glucose target profile chart, 24 hours"))
         }
     }
 }

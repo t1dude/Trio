@@ -13,12 +13,17 @@ extension BasalProfileEditor {
         }
 
         var supportedBasalRates: [Decimal]? {
-            deviceManager.pumpManager?.supportedBasalRates.map { Decimal($0) }
+            // Drops 0 even where the pump accepts it: oref rejects a schedule containing a 0 rate, so a scheduled
+            // basal of 0 would be saved and then refused. Zero temp basals are unaffected — they do not come
+            // from this list.
+            deviceManager.pumpManager?.supportedBasalRates
+                .filter { $0 > 0 }
+                .map { Decimal($0) }
         }
 
         func saveProfile(_ profile: [BasalProfileEntry]) -> AnyPublisher<Void, Error> {
             guard let pump = deviceManager?.pumpManager else {
-                debugPrint("\(DebuggingIdentifiers.failed) No pump found; cannot save basal profile!")
+                warning(.settings, "Basal profile not saved, no pump connected")
                 return Fail(error: NSError()).eraseToAnyPublisher()
             }
 

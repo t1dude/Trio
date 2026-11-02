@@ -34,21 +34,6 @@ struct CurrentGlucoseView: View {
 
     @Environment(\.colorScheme) var colorScheme
 
-    private var deltaFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        if units == .mmolL {
-            formatter.maximumFractionDigits = 1
-            formatter.minimumFractionDigits = 1
-            formatter.roundingMode = .halfUp
-        } else {
-            formatter.maximumFractionDigits = 0
-        }
-        formatter.positivePrefix = "  +"
-        formatter.negativePrefix = "  -"
-        return formatter
-    }
-
     var body: some View {
         let triangleColor = Color(red: 0.262745098, green: 0.7333333333, blue: 0.9137254902)
 
@@ -69,6 +54,8 @@ struct CurrentGlucoseView: View {
                             .foregroundStyle(stale.color)
                     }
                 }.frame(alignment: .top)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(stale.label))
             } else {
                 // Bobble renders at 0.9 to leave breathing room for the right
                 // panel + pump view siblings; the compact and empty-state
@@ -85,8 +72,14 @@ struct CurrentGlucoseView: View {
                     }
                 HStack {
                     Text("Add CGM").font(.caption).bold()
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 100)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }.frame(alignment: .top)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Add CGM"))
+                .accessibilityAddTraits(.isButton)
         }
     }
 
@@ -147,6 +140,9 @@ struct CurrentGlucoseView: View {
                 }
             }
         }
+        // read the value, range, trend, delta and age as one element instead of fragments
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(bobbleAccessibilityLabel))
     }
 
     private var delta: String {
@@ -154,22 +150,75 @@ struct CurrentGlucoseView: View {
             return "--"
         }
 
-        var lastGlucose = Decimal(glucose.last?.glucose ?? 0)
-        var secondLastGlucose = Decimal(glucose.first?.glucose ?? 0)
-        if units == .mmolL {
-            lastGlucose = lastGlucose.asMmolL
-            secondLastGlucose = secondLastGlucose.asMmolL
+        let lastGlucose = Decimal(glucose.last?.glucose ?? 0)
+        let secondLastGlucose = Decimal(glucose.first?.glucose ?? 0)
+        return (lastGlucose - secondLastGlucose).formattedDelta(for: units)
+    }
+
+    /// Spoken trend from the CGM direction arrow (which is otherwise image-only).
+    private var trendDescription: String? {
+        switch glucose.last?.directionEnum {
+        case .doubleUp,
+             .tripleUp:
+            return String(localized: "rising quickly", comment: "Accessibility: glucose trend")
+        case .singleUp:
+            return String(localized: "rising", comment: "Accessibility: glucose trend")
+        case .fortyFiveUp:
+            return String(localized: "rising slowly", comment: "Accessibility: glucose trend")
+        case .flat:
+            return String(localized: "steady", comment: "Accessibility: glucose trend")
+        case .fortyFiveDown:
+            return String(localized: "falling slowly", comment: "Accessibility: glucose trend")
+        case .singleDown:
+            return String(localized: "falling", comment: "Accessibility: glucose trend")
+        case .doubleDown,
+             .tripleDown:
+            return String(localized: "falling quickly", comment: "Accessibility: glucose trend")
+        default:
+            return nil
         }
-        let delta = lastGlucose - secondLastGlucose
-        return deltaFormatter.string(from: delta as NSNumber) ?? "--"
+    }
+
+    /// Spoken range so the glucose value isn't conveyed by color alone.
+    private func rangeDescription(for glucoseValue: Int16) -> String {
+        let value = Decimal(glucoseValue)
+        if value < lowGlucose {
+            return String(localized: "below range", comment: "Accessibility: glucose range")
+        }
+        if value > highGlucose {
+            return String(localized: "above range", comment: "Accessibility: glucose range")
+        }
+        return String(localized: "in range", comment: "Accessibility: glucose range")
+    }
+
+    /// One combined VoiceOver description for the bobble, e.g.
+    /// "Glucose 79 mg/dL, in range, falling, delta -2, 1 minute ago".
+    private var bobbleAccessibilityLabel: String {
+        guard let glucoseValue = glucose.last?.glucose, isReadingFresh else {
+            return String(localized: "Glucose unavailable", comment: "Accessibility: no fresh glucose")
+        }
+        let valueString = glucoseValue == 400
+            ? String(localized: "high", comment: "Accessibility: glucose is at the top of the scale")
+            : Decimal(glucoseValue).formatted(for: units)
+        var parts = [String(localized: "Glucose", comment: "Accessibility: glucose label") + " \(valueString) \(units.rawValue)"]
+        parts.append(rangeDescription(for: glucoseValue))
+        if let trend = trendDescription { parts.append(trend) }
+        if delta != "--" {
+            parts.append(String(localized: "delta", comment: "Accessibility: glucose delta") + " \(delta)")
+        }
+        parts.append(TimeAgoFormatter.minutesAgoAccessible(from: glucose.last?.date))
+        // Fold in the sensor-lifecycle tag (warmup countdown, "expired", "stabilizing") so
+        // it is spoken; the visual tag is a child that the ignore above would otherwise drop.
+        if let tag = tagLabel, !trendIsDownward, !tag.text.isEmpty {
+            parts.append(tag.text)
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder private func bobbleContent() -> some View {
         HStack {
             if let glucoseValue = glucose.last?.glucose, isReadingFresh {
-                let displayGlucose = units == .mgdL
-                    ? Decimal(glucoseValue).description
-                    : Decimal(glucoseValue).formattedAsMmolL
+                let displayGlucose = Decimal(glucoseValue).formatted(for: units)
                 Text(glucoseValue == 400 ? "HIGH" : displayGlucose)
                     .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundStyle(glucoseColor(for: glucoseValue))
@@ -228,6 +277,14 @@ struct CurrentGlucoseView: View {
         return (status.imageName, oneLine, color)
     }
 
+    /// A status the user has to act on — sensor issue, signal loss, failure.
+    /// Not gated by sensor age: it is the reason the readings stopped making
+    /// sense, whether the sensor is on day two or day ten.
+    private var statusDemandsAttention: Bool {
+        guard let status = cgmStatus else { return false }
+        return status.status != .normal
+    }
+
     /// Arc shown for warmup, the last 48 h of a time-based sensor (incl.
     /// grace period), or any non-normal state from a battery-based manager.
     private var shouldShowArc: Bool {
@@ -265,14 +322,17 @@ struct CurrentGlucoseView: View {
         if isStabilizing {
             return ("Stabilizing", .orange, "hourglass")
         }
-        guard shouldShowArc else { return nil }
         if let status = cgmStatus {
+            // Only the normal tier is gated to the arc's 48h window; a warning
+            // or critical status has to show whatever the sensor's age.
+            guard statusDemandsAttention || shouldShowArc else { return nil }
             // LibreLoop's cgmStatusHighlight uses "\n" to split two-line pill
             // labels ("Signal\nLoss", "Sensor\nWarmup"); we render in a
             // single-line tag, so collapse newlines to spaces here.
             let oneLine = status.localizedMessage.replacingOccurrences(of: "\n", with: " ")
             return (oneLine, theme(for: status.status), nil)
         }
+        guard shouldShowArc else { return nil }
         if let expiresAt = cgmSensorExpiresAt {
             let text = SensorRemainingTimeFormatter.format(until: expiresAt)
             let theme: SensorStatusTagTheme

@@ -11,7 +11,7 @@ struct GlucosePercentileChart: View {
     let glucose: [GlucoseStored]
     /// The upper glucose limit for the chart.
     let highLimit: Decimal
-    /// TITR or TING
+    /// Lower threshold for TIR and TITR.
     let timeInRangeType: TimeInRangeType
     /// The units used for glucose measurement (mg/dL or mmol/L).
     let units: GlucoseUnits
@@ -132,9 +132,9 @@ struct GlucosePercentileChart: View {
                     ("10-90%", Color.blue.opacity(0.3)),
                     ("25-75%", Color.blue.opacity(0.5)),
                     (String(localized: "Median"), Color.blue),
-                    (String(localized: "\(timeInRangeType.bottomThreshold.formatted(withUnits: units))"), Color.staticLow),
-                    (String(localized: "\(timeInRangeType.topThreshold.formatted(withUnits: units))"), Color.staticInRange),
-                    (String(localized: "\(highLimit.formatted(withUnits: units))"), Color.staticHigh)
+                    (timeInRangeType.bottomThreshold.formatted(withUnits: units), Color.staticLow),
+                    (timeInRangeType.topThreshold.formatted(withUnits: units), Color.staticInRange),
+                    (highLimit.formatted(withUnits: units), Color.staticHigh)
                 ]
 
                 let columns = [GridItem(.adaptive(minimum: 100), spacing: 4)]
@@ -167,15 +167,15 @@ struct GlucosePercentileChart: View {
                     .padding(.vertical, 3)
             }
             .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: 3)) { value in
+                AxisMarks(preset: .aligned, values: .stride(by: .hour, count: 3)) { value in
                     if let date = value.as(Date.self) {
                         let hour = Calendar.current.component(.hour, from: date)
                         switch hour {
                         case 0,
                              12:
-                            AxisValueLabel(format: .dateTime.hour())
+                            AxisValueLabel(format: .dateTime.hour(), anchor: .top)
                         default:
-                            AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
+                            AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)), anchor: .top)
                         }
 
                         AxisGridLine()
@@ -184,6 +184,8 @@ struct GlucosePercentileChart: View {
             }
             .chartXSelection(value: $selection.animation(.easeInOut))
             .frame(height: 200)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Glucose percentile chart"))
         }
     }
 }

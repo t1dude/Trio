@@ -199,12 +199,8 @@ extension Int {
         Trio.rounded(Decimal(self) * GlucoseUnits.exchangeRate, scale: 1, roundingMode: .plain)
     }
 
-    var formattedAsMmolL: String {
-        NumberFormatter.glucoseFormatter.string(from: asMmolL as NSDecimalNumber) ?? "\(asMmolL)"
-    }
-
     func formatted(for units: GlucoseUnits) -> String {
-        units == .mgdL ? description : formattedAsMmolL
+        Decimal(self).formatted(for: units)
     }
 
     func formatted(withUnits units: GlucoseUnits) -> String {
@@ -225,16 +221,34 @@ extension Decimal {
         Trio.rounded(self / GlucoseUnits.exchangeRate, scale: 0, roundingMode: .plain)
     }
 
-    var formattedAsMmolL: String {
-        NumberFormatter.glucoseFormatter.string(from: asMmolL as NSDecimalNumber) ?? "\(asMmolL)"
+    func formatted(for units: GlucoseUnits, locale: Locale = .autoupdatingCurrent) -> String {
+        converted(to: units).formatted(Self.glucoseStyle(for: units).locale(locale))
     }
 
-    func formatted(for units: GlucoseUnits) -> String {
-        units == .mgdL ? description : formattedAsMmolL
+    func formattedDelta(for units: GlucoseUnits, locale: Locale = .autoupdatingCurrent) -> String {
+        converted(to: units).formatted(Self.glucoseStyle(for: units).locale(locale).sign(strategy: .always(includingZero: true)))
+    }
+
+    func formattedISF(for units: GlucoseUnits, locale: Locale = .autoupdatingCurrent) -> String {
+        converted(to: units).formatted(Self.glucoseStyle(for: units, mgdLFractionLength: 0 ... 1).locale(locale))
     }
 
     func formatted(withUnits units: GlucoseUnits) -> String {
         formatted(for: units) + " \(units.rawValue)"
+    }
+
+    private func converted(to units: GlucoseUnits) -> Decimal {
+        units == .mgdL ? self : self * GlucoseUnits.exchangeRate
+    }
+
+    private static func glucoseStyle(
+        for units: GlucoseUnits,
+        mgdLFractionLength: ClosedRange<Int> = 0 ... 0
+    ) -> Decimal.FormatStyle {
+        .number
+            .precision(.fractionLength(units == .mgdL ? mgdLFractionLength : 1 ... 1))
+            .grouping(.never)
+            .rounded(rule: .toNearestOrAwayFromZero)
     }
 }
 
@@ -251,12 +265,8 @@ extension Double {
         Trio.rounded(Decimal(self) / GlucoseUnits.exchangeRate, scale: 0, roundingMode: .plain)
     }
 
-    var formattedAsMmolL: String {
-        NumberFormatter.glucoseFormatter.string(from: asMmolL as NSDecimalNumber) ?? "\(asMmolL)"
-    }
-
     func formatted(for units: GlucoseUnits) -> String {
-        units == .mgdL ? description : formattedAsMmolL
+        Decimal(self).formatted(for: units)
     }
 
     func formatted(withUnits units: GlucoseUnits) -> String {
@@ -264,13 +274,36 @@ extension Double {
     }
 }
 
-extension NumberFormatter {
-    static let glucoseFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale.current
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 1
-        formatter.maximumFractionDigits = 1
-        return formatter
-    }()
+/// Spells out compact unit abbreviations for VoiceOver so screen readers don't voice
+/// "mg/dL" as letters or "U" as "you". Compound units (e.g. "mg/dL/U", "g/U", "U/hr")
+/// are split on "/" and joined with "per", so each token only needs a single mapping.
+enum UnitSpelling {
+    private static let tokens: [String: String] = [
+        "mg": String(localized: "milligrams", comment: "Accessibility: spoken unit"),
+        "dL": String(localized: "deciliter", comment: "Accessibility: spoken unit"),
+        "mmol": String(localized: "millimoles", comment: "Accessibility: spoken unit"),
+        "L": String(localized: "liter", comment: "Accessibility: spoken unit"),
+        "U": String(localized: "units", comment: "Accessibility: spoken unit"),
+        "g": String(localized: "grams", comment: "Accessibility: spoken unit"),
+        "hr": String(localized: "hour", comment: "Accessibility: spoken unit"),
+        "min": String(localized: "minutes", comment: "Accessibility: spoken unit"),
+        "%": String(localized: "percent", comment: "Accessibility: spoken unit")
+    ]
+
+    /// Returns a spoken form of a unit string, e.g. "mg/dL/U" -> "milligrams per deciliter per units".
+    /// Unknown tokens pass through unchanged.
+    static func spoken(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return "" }
+        let separator = " " + String(localized: "per", comment: "Accessibility: unit separator, as in grams per unit") + " "
+        return trimmed
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map { tokens[String($0)] ?? String($0) }
+            .joined(separator: separator)
+    }
+}
+
+extension GlucoseUnits {
+    /// Spoken glucose unit for VoiceOver ("milligrams per deciliter" / "millimoles per liter").
+    var spokenValue: String { UnitSpelling.spoken(rawValue) }
 }

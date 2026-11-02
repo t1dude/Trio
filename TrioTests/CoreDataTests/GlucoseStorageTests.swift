@@ -114,17 +114,39 @@ import Testing
 
     @Test("Get glucose not yet uploaded to Nightscout") func testGetGlucoseNotYetUploadedToNightscout() async throws {
         // Given
+        let wholeSeconds = Int64(Date().timeIntervalSince1970)
+        let date = Date(timeIntervalSince1970: TimeInterval(wholeSeconds) + 0.2038)
+        let expectedMilliseconds = Decimal(wholeSeconds * 1000 + 204)
         let testGlucose = [
-            BloodGlucose(direction: BloodGlucose.Direction.flat, date: 123, dateString: Date(), glucose: 160)
+            BloodGlucose(direction: BloodGlucose.Direction.flat, date: 123, dateString: date, glucose: 160)
         ]
         try await storage.storeGlucose(testGlucose)
+        try await testContext.perform {
+            let manualGlucose = GlucoseStored(context: testContext)
+            manualGlucose.id = UUID()
+            manualGlucose.date = date
+            manualGlucose.glucose = 161
+            manualGlucose.isManual = true
+            manualGlucose.isUploadedToNS = false
+            manualGlucose.isUploadedToHealth = false
+            manualGlucose.isUploadedToTidepool = false
+            try testContext.save()
+        }
 
         // When
         let notUploadedEntries = try await storage.getGlucoseNotYetUploadedToNightscout()
 
         // Then
-        #expect(!notUploadedEntries.isEmpty, "Should have entries not uploaded to NS")
-        #expect(notUploadedEntries[0].glucose == 160, "Glucose value should match")
+        let sensorEntry = notUploadedEntries.first { $0.sgv == 160 }
+        #expect(sensorEntry != nil, "Should have the sensor entry not uploaded to NS")
+        #expect(sensorEntry?.date == expectedMilliseconds, "Sensor date should use integer milliseconds")
+        #expect(sensorEntry?.dateString == date, "Sensor date fields should represent the same instant")
+
+        let manualEntry = notUploadedEntries.first { $0.mbg == 161 }
+        #expect(manualEntry != nil, "Should have the manual entry not uploaded to NS")
+        #expect(manualEntry?.date == expectedMilliseconds, "Manual date should use integer milliseconds")
+        #expect(manualEntry?.dateString == date, "Manual date fields should represent the same instant")
+        #expect(manualEntry?.type == "mbg", "Manual entry type should remain unchanged")
     }
 
     @Test("Sub-39 glucose is clamped to 39 on storeGlucose") func testStoreGlucoseClampsBelowMinimum() async throws {
@@ -178,6 +200,58 @@ import Testing
         ) as? [GlucoseStored]
 
         #expect(clampedEntries?.count == 1, "Sub-39 backfilled glucose should be clamped and stored as 39")
+    }
+
+    @Test("Manual glucose does not advance CGM sync dates") func testSyncDateIgnoresManualGlucose() async throws {
+        // Given a CGM reading followed by a manual entry 3 minutes later
+        let cgmDate = Date().addingTimeInterval(-5 * 60)
+        try await storage.storeGlucose([
+            BloodGlucose(direction: BloodGlucose.Direction.flat, date: 789, dateString: cgmDate, glucose: 110)
+        ])
+        try await insertManualGlucose(112, at: cgmDate.addingTimeInterval(3 * 60))
+
+        // When
+        let syncDate = storage.syncDate()
+
+        // Then the next CGM reading is not filtered as too frequent
+        #expect(abs(syncDate.timeIntervalSince(cgmDate)) < 1, "syncDate should be the last CGM reading")
+        let lastDate = try #require(storage.lastGlucoseDate())
+        #expect(abs(lastDate.timeIntervalSince(cgmDate)) < 1, "lastGlucoseDate should be the last CGM reading")
+        let next = BloodGlucose(direction: .flat, date: 790, dateString: cgmDate.addingTimeInterval(5 * 60), glucose: 108)
+        #expect(storage.filterTooFrequentGlucose([next], at: syncDate).count == 1)
+    }
+
+    @Test("Backfill is not deduplicated against manual glucose") func testBackfillIgnoresManualGlucose() async throws {
+        // Given a manual entry 1 minute after a missed CGM reading
+        let backfillDate = Date().addingTimeInterval(-20 * 60)
+        try await insertManualGlucose(150, at: backfillDate.addingTimeInterval(60))
+
+        // When
+        try await storage.backfillGlucose([
+            BloodGlucose(direction: BloodGlucose.Direction.flat, date: 791, dateString: backfillDate, glucose: 147)
+        ])
+
+        // Then the backfilled CGM reading is stored
+        let backfilled = try await coreDataStack.fetchEntitiesAsync(
+            ofType: GlucoseStored.self,
+            onContext: testContext,
+            predicate: NSPredicate(format: "glucose == 147 AND isManual == NO"),
+            key: "date",
+            ascending: false
+        ) as? [GlucoseStored]
+
+        #expect(backfilled?.count == 1, "Backfilled CGM reading near a manual entry should be stored")
+    }
+
+    private func insertManualGlucose(_ glucose: Int16, at date: Date) async throws {
+        try await testContext.perform {
+            let manualGlucose = GlucoseStored(context: testContext)
+            manualGlucose.id = UUID()
+            manualGlucose.date = date
+            manualGlucose.glucose = glucose
+            manualGlucose.isManual = true
+            try testContext.save()
+        }
     }
 
     @Test(

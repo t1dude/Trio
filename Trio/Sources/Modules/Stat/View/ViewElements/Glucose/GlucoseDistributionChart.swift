@@ -11,9 +11,6 @@ struct GlucoseDistributionChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Glucose Distribution")
-                .font(.headline)
-
             Chart(glucoseRangeStats) { range in
                 ForEach(range.values, id: \.hour) { value in
                     AreaMark(
@@ -35,28 +32,28 @@ struct GlucoseDistributionChart: View {
             ])
             .chartLegend(position: .bottom, alignment: .leading, spacing: 12) {
                 let legendItems: [(String, Color)] = [
-                    ("<\(units == .mgdL ? Decimal(54) : 54.asMmolL)", .dynamicRed.opacity(0.8)),
+                    ("<\(54.formatted(for: units))", .dynamicRed.opacity(0.8)),
                     (
-                        "\(units == .mgdL ? Decimal(54) : 54.asMmolL)-\(units == .mgdL ? Decimal(timeInRangeType.bottomThreshold) : timeInRangeType.bottomThreshold.asMmolL)",
+                        "\(54.formatted(for: units))-\(timeInRangeType.bottomThreshold.formatted(for: units))",
                         .dynamicOrange.opacity(0.8)
                     ),
                     (
-                        "\(units == .mgdL ? Decimal(timeInRangeType.bottomThreshold) : timeInRangeType.bottomThreshold.asMmolL)-\(units == .mgdL ? Decimal(timeInRangeType.topThreshold) : timeInRangeType.topThreshold.asMmolL)",
+                        "\(timeInRangeType.bottomThreshold.formatted(for: units))-\(timeInRangeType.topThreshold.formatted(for: units))",
                         .dynamicGreen.opacity(0.8)
                     ),
                     (
-                        "\(units == .mgdL ? Decimal(timeInRangeType.topThreshold) : timeInRangeType.topThreshold.asMmolL)-\(units == .mgdL ? Decimal(180) : 180.asMmolL)",
+                        "\(timeInRangeType.topThreshold.formatted(for: units))-\(180.formatted(for: units))",
                         .dynamicTeal.opacity(0.8)
                     ),
                     (
-                        "\(units == .mgdL ? Decimal(180) : 180.asMmolL)-\(units == .mgdL ? Decimal(200) : 200.asMmolL)",
+                        "\(180.formatted(for: units))-\(200.formatted(for: units))",
                         .dynamicBlue.opacity(0.8)
                     ),
                     (
-                        "\(units == .mgdL ? Decimal(200) : 200.asMmolL)-\(units == .mgdL ? Decimal(220) : 220.asMmolL)",
+                        "\(200.formatted(for: units))-\(220.formatted(for: units))",
                         .dynamicIndigo.opacity(0.8)
                     ),
-                    (">\(units == .mgdL ? Decimal(220) : 220.asMmolL)", .dynamicPurple.opacity(0.8))
+                    (">\(220.formatted(for: units))", .dynamicPurple.opacity(0.8))
                 ]
 
                 let columns = [GridItem(.adaptive(minimum: 65), spacing: 4)]
@@ -78,22 +75,16 @@ struct GlucoseDistributionChart: View {
                     }
                 }
             }
-            .chartYAxisLabel(alignment: .trailing) {
-                Text("Percentage")
-                    .foregroundStyle(.primary)
-                    .font(.footnote)
-                    .padding(.vertical, 3)
-            }
             .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: 3)) { value in
+                AxisMarks(preset: .aligned, values: .stride(by: .hour, count: 3)) { value in
                     if let date = value.as(Date.self) {
                         let hour = Calendar.current.component(.hour, from: date)
                         switch hour {
                         case 0,
                              12:
-                            AxisValueLabel(format: .dateTime.hour())
+                            AxisValueLabel(format: .dateTime.hour(), anchor: .top)
                         default:
-                            AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
+                            AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)), anchor: .top)
                         }
 
                         AxisGridLine()
@@ -101,6 +92,8 @@ struct GlucoseDistributionChart: View {
                 }
             }
             .frame(height: 200)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Glucose distribution by time of day chart"))
         }
     }
 }

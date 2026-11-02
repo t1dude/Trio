@@ -71,27 +71,29 @@ import Foundation
 
     public var wrappedValue: Value? {
         get {
+            guard FileManager.default.fileExists(atPath: storageURL.path) else { return nil }
             do {
                 let data = try Data(contentsOf: storageURL)
 
                 guard let value = try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? Value
                 else {
-                    debug(.storage, "[PersistedProperty:\(key)] Could not cast property list to expected type.")
+                    warning(.storage, "Persisted value '\(key)' has an unexpected type")
                     return nil
                 }
                 return value
             } catch {
-                debug(.storage, "❌ [PersistedProperty:\(key)] Failed to read value: \(error)")
+                warning(.storage, "Reading persisted value '\(key)' failed", error: error)
                 return nil
             }
         }
         set {
             guard let newValue = newValue else {
+                guard FileManager.default.fileExists(atPath: storageURL.path) else { return }
                 do {
                     try FileManager.default.removeItem(at: storageURL)
-                    debug(.storage, "[PersistedProperty:\(key)] Removed value.")
+                    debug(.storage, "Removed persisted value '\(key)'")
                 } catch {
-                    debug(.storage, "❌ [PersistedProperty:\(key)] Failed to remove value: \(error)")
+                    warning(.storage, "Removing persisted value '\(key)' failed", error: error)
                 }
                 return
             }
@@ -106,9 +108,9 @@ import Foundation
                     ofItemAtPath: storageURL.path
                 )
 
-                debug(.storage, "✅ [PersistedProperty:\(key)] Saved value successfully.")
+                debug(.storage, "Saved persisted value '\(key)'")
             } catch {
-                debug(.storage, "❌ [PersistedProperty:\(key)] Failed to write value: \(error)")
+                warning(.storage, "Saving persisted value '\(key)' failed", error: error)
             }
         }
     }
@@ -126,7 +128,10 @@ enum FileProtectionFixer {
             "hasSeenFatProteinOrderChange.plist",
             "telemetrySharingEnabled.plist",
             "telemetryLastSentAt.plist",
+            "telemetryAnonymousLastSentAt.plist",
+            "telemetryLastAttemptAt.plist",
             "telemetryLastSentSha.plist",
+            "telemetryLastFailureReason.plist",
             "telemetryColdLaunchTimes.plist",
             "telemetryInstallId.plist",
             "telemetryAttestForbidden.plist",
@@ -141,7 +146,7 @@ enum FileProtectionFixer {
             appropriateFor: nil,
             create: false
         ) else {
-            debug(.storage, "⚠️ Could not access the documents directory.")
+            warning(.storage, "Documents directory unavailable, skipping file protection update")
             return
         }
 
@@ -157,9 +162,9 @@ enum FileProtectionFixer {
                     [.protectionKey: FileProtectionType.none],
                     ofItemAtPath: fileURL.path
                 )
-                debug(.storage, "✅ Updated protection for \(fileName)")
+                debug(.storage, "Updated file protection for \(fileName)")
             } catch {
-                debug(.storage, "❌ Failed to update protection for \(fileName): \(error)")
+                warning(.storage, "Updating file protection for \(fileName) failed", error: error)
             }
         }
     }

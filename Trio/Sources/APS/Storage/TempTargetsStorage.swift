@@ -8,7 +8,7 @@ protocol TempTargetsObserver {
 }
 
 protocol TempTargetsStorage {
-    func storeTempTarget(tempTarget: TempTarget) async throws
+    @discardableResult func storeTempTarget(tempTarget: TempTarget) async throws -> NSManagedObjectID
     func saveTempTargetsToStorage(_ targets: [TempTarget])
     func fetchForTempTargetPresets() async throws -> [NSManagedObjectID]
     func fetchScheduledTempTargets() async throws -> [NSManagedObjectID]
@@ -131,7 +131,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
         }
     }
 
-    func storeTempTarget(tempTarget: TempTarget) async throws {
+    @discardableResult func storeTempTarget(tempTarget: TempTarget) async throws -> NSManagedObjectID {
         let context = makeContext()
         context.name = "storeTempTarget"
 
@@ -141,7 +141,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
             presetCount = presets.count
         }
 
-        try await context.perform {
+        return try await context.perform {
             let newTempTarget = TempTargetStored(context: context)
             newTempTarget.date = tempTarget.createdAt
             newTempTarget.id = UUID()
@@ -167,12 +167,15 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
             }
 
             do {
-                guard context.hasChanges else { return }
-                try context.save()
+                if context.hasChanges {
+                    try context.save()
+                }
             } catch let error as NSError {
-                debug(.default, "\(DebuggingIdentifiers.failed) Failed to save new temp target with error: \(error.userInfo)")
+                warning(.storage, "Saving new temp target failed", error: error)
                 throw error
             }
+
+            return newTempTarget.objectID
         }
     }
 
@@ -210,7 +213,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
                 let results = try context.fetch(fetchRequest)
                 return !results.isEmpty
             } catch let error as NSError {
-                debugPrint("\(DebuggingIdentifiers.failed) Failed to check for existing Temp Target: \(error)")
+                warning(.storage, "Checking for an existing temp target failed", error: error)
                 return false
             }
         }
@@ -235,9 +238,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
                 guard self.viewContext.hasChanges else { return }
                 try self.viewContext.save()
             } catch let error as NSError {
-                debugPrint(
-                    "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to copy Temp Target with error: \(error.userInfo)"
-                )
+                warning(.storage, "Saving copied temp target failed", error: error)
             }
         }
 
@@ -252,7 +253,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
             do {
                 let result = try context.existingObject(with: objectID) as? TempTargetStored
                 guard let tempTarget = result else {
-                    debug(.default, "\(DebuggingIdentifiers.failed) Temp Target for batch delete not found.")
+                    warning(.storage, "Temp target preset to delete not found")
                     return
                 }
 
@@ -261,7 +262,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
                 guard context.hasChanges else { return }
                 try context.save()
             } catch {
-                debug(.default, "\(DebuggingIdentifiers.failed) Failed to delete Temp Target: \(error)")
+                warning(.storage, "Deleting temp target preset failed", error: error)
             }
         }
     }
@@ -336,7 +337,7 @@ final class BaseTempTargetsStorage: TempTargetsStorage, Injectable {
             ofType: TempTargetRunStored.self,
             onContext: context,
             predicate: NSPredicate(
-                format: "startDate >= %@ AND isUploadedToNS == %@",
+                format: "endDate >= %@ AND isUploadedToNS == %@",
                 Date.oneDayAgo as NSDate,
                 false as NSNumber
             ),

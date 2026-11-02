@@ -15,6 +15,13 @@ struct BasalProfile: Hashable {
     }
 }
 
+struct PreparedTempBasal: Equatable {
+    let start: Date
+    let end: Date
+    let rate: Double
+    let isScheduled: Bool
+}
+
 extension MainChartCanvas {
     var basalChart: some View {
         VStack {
@@ -42,15 +49,21 @@ extension MainChartCanvas {
     /// (drawn at `basalDomainMax - rate`), so the tallest rate spans the full strip height —
     /// matching the old rendering, which achieved the same look by rotating and mirroring
     /// the plot content.
-    var basalDomainMax: Double {
-        let tempMax = preparedTempBasals.map(\.rate).max() ?? 0
-        let profileMax = basalProfiles.map(\.amount).max() ?? 0
-        return max(tempMax, profileMax, 0.1)
+    @MainActor func recomputeBasalDomainMax() {
+        let tempMax = preparedTempBasals.lazy.map(\.rate).max() ?? 0
+        let profileMax = basalProfiles.lazy.map(\.amount).max() ?? 0
+        basalDomainMax = max(tempMax, profileMax, 0.1)
     }
 
     /// Converts a basal rate to its top-anchored y value.
     private func invertedY(_ rate: Double) -> Double {
         basalDomainMax - rate
+    }
+
+    /// To be used instead of "now" for basal calculations so we can skip
+    /// redundant updates happening within the same second.
+    static func secondAnchoredNow() -> Date {
+        Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
     }
 }
 
@@ -76,12 +89,15 @@ extension MainChartCanvas {
                     endPoint: .bottom
                 )
             ).alignsMarkStylesWithPlotArea()
+                .opacity(basal.isScheduled ? 0.5 : 1)
 
             LineMark(x: .value("Start Date", basal.start), y: .value("Amount", invertedY(basal.rate)))
                 .lineStyle(.init(lineWidth: 1)).foregroundStyle(Color.insulin)
+                .opacity(basal.isScheduled ? 0.5 : 1)
 
             LineMark(x: .value("End Date", basal.end), y: .value("Amount", invertedY(basal.rate)))
                 .lineStyle(.init(lineWidth: 1)).foregroundStyle(Color.insulin)
+                .opacity(basal.isScheduled ? 0.5 : 1)
         }
     }
 
@@ -146,38 +162,86 @@ extension MainChartCanvas {
 
 extension MainChartCanvas {
     @MainActor func calculateTempBasals() {
-        let now = Date()
+        let now = Self.secondAnchoredNow()
         let suspensionTimes = state.suspendAndResumeEvents.compactMap(\.timestamp)
 
         // Snapshot the managed-object fields once; plain values from here on.
         let events = state.tempBasals.map {
-            (timestamp: $0.timestamp, duration: $0.tempBasal?.duration ?? 0, rate: $0.tempBasal?.rate)
+            (
+                timestamp: $0.timestamp,
+                duration: $0.tempBasal?.duration ?? 0,
+                rate: $0.tempBasal?.rate,
+                isScheduled: $0.tempBasal?.isScheduledBasal ?? false
+            )
         }
 
-        var prepared = [(start: Date, end: Date, rate: Double)]()
-        prepared.reserveCapacity(events.count)
+        // A scheduled-basal row marks a schedule change, not a delivery change: the pump logs one
+        // whenever its schedule is reprogrammed, which Trio itself triggers on saving a basal
+        // profile — even mid temp basal. Such a row must neither draw a bar nor clip the temp basal
+        // that is actually delivering, so only real delivery events lay out bars. The sweep below
+        // paints what no temp basal covered.
+        let deliveryEvents = events.filter { !$0.isScheduled }
 
-        for (index, event) in events.enumerated() {
+        var prepared = [PreparedTempBasal]()
+        prepared.reserveCapacity(deliveryEvents.count)
+
+        for (index, event) in deliveryEvents.enumerated() {
             let timestamp = event.timestamp ?? now
             let end = timestamp + event.duration.minutes
-            let isInsulinSuspended = suspensionTimes.contains { $0 >= timestamp && $0 <= end }
-            let rate = Double(truncating: event.rate ?? 0) * (isInsulinSuspended ? 0 : 1)
 
-            // A bar ends where the next later-starting temp basal begins,
-            // else at its own scheduled end.
+            // Start of the next later-starting temp basal, which supersedes this one.
             var next = index + 1
-            while next < events.count {
-                if let nextStart = events[next].timestamp, nextStart > timestamp { break }
+            while next < deliveryEvents.count {
+                if let nextStart = deliveryEvents[next].timestamp, nextStart > timestamp { break }
                 next += 1
             }
-            if next < events.count, let nextStart = events[next].timestamp {
-                prepared.append((timestamp, nextStart, rate))
-            } else {
-                prepared.append((timestamp, end, rate))
-            }
+            let nextStart = next < deliveryEvents.count ? deliveryEvents[next].timestamp : nil
+
+            // A temp basal ends at its own scheduled end, or earlier where a later one superseded
+            // it. Stretching it to the next event would paint the temp rate over a span the pump
+            // ran its schedule; that span is swept below instead.
+            let barEnd = nextStart.map { min(end, $0) } ?? end
+
+            let isInsulinSuspended = suspensionTimes.contains { $0 >= timestamp && $0 <= barEnd }
+            let rate = Double(truncating: event.rate ?? 0) * (isInsulinSuspended ? 0 : 1)
+
+            prepared.append(PreparedTempBasal(start: timestamp, end: barEnd, rate: rate, isScheduled: false))
         }
 
-        preparedTempBasals = prepared
+        // gaps no event covers ran the pump's schedule; inferred in memory, drawn dimmed
+        var timeline = prepared.map {
+            ScheduledBasalInference.TimelineEvent(start: $0.start, end: $0.end, kind: .tempBasal)
+        }
+        // A schedule change covers nothing, but it does tell us the pump was reporting: without it
+        // an open-loop window holding only scheduled rows would have no anchor and sweep to nothing.
+        timeline += events.filter(\.isScheduled).compactMap { event in
+            event.timestamp.map { ScheduledBasalInference.TimelineEvent(start: $0, kind: .tempBasal) }
+        }
+        timeline += state.suspendAndResumeEvents.compactMap { event -> ScheduledBasalInference.TimelineEvent? in
+            guard let timestamp = event.timestamp else { return nil }
+            let isSuspend = event.type == PumpEventStored.EventType.pumpSuspend.rawValue
+            return ScheduledBasalInference.TimelineEvent(start: timestamp, kind: isSuspend ? .suspend : .resume)
+        }
+        for segment in ScheduledBasalInference.segments(events: timeline, profile: state.basalProfile, now: now) {
+            prepared.append(PreparedTempBasal(
+                start: segment.start,
+                end: segment.end,
+                rate: Double(truncating: segment.rate as NSNumber),
+                isScheduled: true
+            ))
+        }
+
+        // One line series strokes the whole outline: out-of-order bars backtrack across it,
+        // and a zero-length bar leaves a stray point it then connects diagonally.
+        let updated = prepared
+            .filter { $0.end > $0.start }
+            .sorted { $0.start < $1.start }
+
+        // Reassigning an identical value would invalidate the body and re-enter this method.
+        guard updated != preparedTempBasals else { return }
+
+        preparedTempBasals = updated
+        recomputeBasalDomainMax()
     }
 
     func findRegularBasalPoints(
@@ -228,7 +292,7 @@ extension MainChartCanvas {
 
     func calculateBasals() {
         Task {
-            let dayAgoTime = Date().addingTimeInterval(-1.days.timeInterval).timeIntervalSince1970
+            let dayAgoTime = Self.secondAnchoredNow().addingTimeInterval(-1.days.timeInterval).timeIntervalSince1970
 
             async let getRegularBasalPoints = findRegularBasalPoints(
                 timeBegin: dayAgoTime,
@@ -283,7 +347,11 @@ extension MainChartCanvas {
             }
 
             await MainActor.run {
+                // Reassigning an identical value would invalidate the body and re-enter this method.
+                guard basals != basalProfiles else { return }
+
                 basalProfiles = basals
+                recomputeBasalDomainMax()
             }
         }
     }

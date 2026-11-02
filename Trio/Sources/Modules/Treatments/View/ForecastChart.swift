@@ -102,11 +102,9 @@ struct ForecastChart: View {
 
     @ViewBuilder private func eventualGlucoseBadge(for eventualBG: Int) -> some View {
         HStack {
-            Text(
-                state.units == .mgdL ? Decimal(eventualBG).description : eventualBG.formattedAsMmolL
-            )
-            .font(.footnote)
-            .foregroundStyle(.primary)
+            Text(eventualBG.formatted(for: state.units))
+                .font(.footnote)
+                .foregroundStyle(.primary)
             Text("\(state.units.rawValue)")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -197,6 +195,27 @@ struct ForecastChart: View {
             "zt": Color.zt,
             "cob": Color.orange
         ])
+        // Custom chart VoiceOver cannot explore; give it a spoken summary.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(forecastChartAccessibilityLabel))
+    }
+
+    /// Spoken summary: latest glucose and the forecast eventual glucose.
+    private var forecastChartAccessibilityLabel: String {
+        let unitLabel = state.units == .mgdL ? String(localized: "mg/dL") : String(localized: "mmol/L")
+        func format(_ value: Int) -> String {
+            value.formatted(for: state.units)
+        }
+        var parts = [String(localized: "Glucose and forecast chart", comment: "Accessibility: chart summary")]
+        if let latest = state.latestGlucose {
+            parts.append(String(localized: "latest", comment: "Accessibility") + " \(format(Int(latest.glucose))) \(unitLabel)")
+        }
+        let eventual: Int? = state.simulatedDetermination?.eventualBG
+            ?? state.determination.first?.eventualBG.map { Int(truncating: $0) }
+        if let eventual {
+            parts.append(String(localized: "forecast eventually", comment: "Accessibility") + " \(format(eventual)) \(unitLabel)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder var selectionPopover: some View {
@@ -221,20 +240,17 @@ struct ForecastChart: View {
                     glucoseColorScheme: state.glucoseColorScheme
                 )
                 HStack {
-                    Text("CGM: ") + Text(state.units == .mgdL ? Decimal(sgv).description : Decimal(sgv).formattedAsMmolL)
+                    Text("CGM: ") + Text(Decimal(sgv).formatted(for: state.units))
                         .bold()
-                        + Text(" \(state.units.rawValue)")
+                        + Text(" " + state.units.rawValue)
                 }.foregroundStyle(
                     Color(glucoseColor)
                 ).font(.footnote)
 
                 if state.isSmoothingEnabled, let smoothedGlucose = selectedGlucose?.smoothedGlucose {
-                    let smoothedGlucoseToDisplay: Decimal = state.units == .mgdL
-                        ? smoothedGlucose.decimalValue
-                        : smoothedGlucose.decimalValue.asMmolL
                     HStack {
                         Image(systemName: "sparkles")
-                        Text(smoothedGlucoseToDisplay.description) + Text(" \(state.units.rawValue)")
+                        Text(smoothedGlucose.decimalValue.formatted(withUnits: state.units))
                     }.font(.footnote)
                 }
             }

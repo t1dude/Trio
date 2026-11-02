@@ -2,7 +2,11 @@ import Foundation
 
 struct ContactImageState: Codable {
     var glucose: String?
+    /// Latest glucose reading in display units, matching the color threshold values below.
+    var glucoseValue: Decimal?
     var trend: String?
+    var direction: BloodGlucose.Direction?
+    var glucoseDate: Date?
     var delta: String?
     var lastLoopDate: Date?
     var iob: Decimal?

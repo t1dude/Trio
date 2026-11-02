@@ -14,14 +14,23 @@ struct TargetPicker: View {
         HStack {
             Text(label)
             Spacer()
-            Text(
-                (units == .mgdL ? selection.description : selection.formattedAsMmolL) + " " + units.rawValue
-            )
-            .foregroundColor(!displayPickerTarget ? .primary : .accentColor)
-            .onTapGesture {
-                displayPickerTarget = toggleScrollWheel(displayPickerTarget)
-            }
+            Text(selection.formatted(withUnits: units))
+                .foregroundColor(!displayPickerTarget ? .primary : .accentColor)
+                .onTapGesture {
+                    displayPickerTarget = toggleScrollWheel(displayPickerTarget)
+                }
         }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(label))
+        .accessibilityValue(Text(selection.formatted(for: units) + " " + units.spokenValue))
+        .accessibilityHint(Text(
+            displayPickerTarget
+                ? String(localized: "Closes the value picker", comment: "Accessibility hint")
+                : String(localized: "Opens a picker to change the target", comment: "Accessibility hint")
+        ))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { displayPickerTarget = toggleScrollWheel(displayPickerTarget) }
         if displayPickerTarget {
             HStack {
                 // Radio buttons and text on the left side
@@ -29,8 +38,7 @@ struct TargetPicker: View {
                     // Radio buttons for step iteration
                     let stepChoices: [Decimal] = units == .mgdL ? [1, 5] : [1, 9]
                     ForEach(stepChoices, id: \.self) { step in
-                        let label = (units == .mgdL ? step.description : step.formattedAsMmolL) + " " +
-                            units.rawValue
+                        let label = step.formatted(withUnits: units)
                         RadioButton(
                             isSelected: targetStep == step,
                             label: label
@@ -54,7 +62,7 @@ struct TargetPicker: View {
                     }
                 ), label: Text("")) {
                     ForEach(options, id: \.self) { option in
-                        Text((units == .mgdL ? option.description : option.formattedAsMmolL) + " " + units.rawValue)
+                        Text(option.formatted(withUnits: units))
                             .tag(option)
                     }
                 }

@@ -16,7 +16,7 @@ env:
 jobs:
   # use a single runner for these sequential steps
   check_status:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     name: Check status to decide whether to build
     permissions:
       contents: write
@@ -154,7 +154,7 @@ jobs:
   cancel_when_no_build:
     needs: check_status
     name: Cancel run when there is nothing to build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       actions: write
     if: |
@@ -237,6 +237,20 @@ jobs:
           # and make sure to specify the submodule by setting "--directory=(submodule_name)".
           # Several patches may be added per submodule.
           # Adding comments (#) is strongly recommended to easily tell the individual patches apart.
+
+      # Optional: silence the startup warning shown on builds made from a branch other
+      # than main. Off unless you deliberately set the repository variable
+      # DEV_BRANCH_WARNING_DISABLED to true (Settings > Secrets and variables > Actions
+      # > Variables). Intended for forks and redistributions that always build from
+      # their own branch - if you are testing dev, leave this alone and keep the warning.
+      - name: Configure Dev Branch Warning
+        if: vars.DEV_BRANCH_WARNING_DISABLED == 'true'
+        run: |
+          # ConfigOverride.xcconfig is gitignored and is included by Config.xcconfig,
+          # so writing it here feeds the flag into the Release build without touching
+          # any tracked file.
+          echo 'SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEV_BRANCH_WARNING_DISABLED' >> ConfigOverride.xcconfig
+          echo "::warning::Development branch warning disabled for this build."
 
       # Patch Fastlane Match to not print tables
       - name: Patch Match Tables

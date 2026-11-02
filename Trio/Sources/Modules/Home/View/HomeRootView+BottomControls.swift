@@ -22,15 +22,6 @@ extension Home.RootView {
         return formatter
     }
 
-    private var fetchedTargetFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        if state.units == .mmolL {
-            formatter.maximumFractionDigits = 1
-        } else { formatter.maximumFractionDigits = 0 }
-        return formatter
-    }
-
     func remainingFraction(start: Date?, durationMinutes: Decimal?, indefinite: Bool) -> Double? {
         guard !indefinite, let start = start, let durationMinutes = durationMinutes, durationMinutes > 0 else {
             return nil
@@ -57,6 +48,7 @@ extension Home.RootView {
             .foregroundStyle(tint)
             .frame(width: 30, height: 30)
             .background(Circle().fill(tint.opacity(0.18)))
+            .accessibilityHidden(true)
     }
 
     var adjustmentTint: Color? {
@@ -78,11 +70,9 @@ extension Home.RootView {
         let percentString = percent == 100 ? "" : "\(percent.formatted(.number)) %"
 
         let unit = state.units
-        var target = (latestOverride.target ?? 0) as Decimal
-        target = unit == .mmolL ? target.asMmolL : target
+        let target = (latestOverride.target ?? 0) as Decimal
 
-        var targetString = target == 0 ? "" : (fetchedTargetFormatter.string(from: target as NSNumber) ?? "") + " " + unit
-            .rawValue
+        var targetString = target == 0 ? "" : target.formatted(withUnits: unit)
         if tempTargetString != nil {
             targetString = ""
         }
@@ -157,7 +147,7 @@ extension Home.RootView {
         )
         var durationString = ""
         var percentageString = ""
-        var target = (latestTempTarget.target ?? 100) as Decimal
+        let target = (latestTempTarget.target ?? 100) as Decimal
         // Use TempTargetCalculations to get effective HBT (handles both custom and auto-adjusted standard TT)
         let effectiveHBT = TempTargetCalculations.computeEffectiveHBT(
             tempTargetHalfBasalTarget: latestTempTarget.halfBasalTarget?.decimalValue,
@@ -172,9 +162,7 @@ extension Home.RootView {
             percentageString =
                 " \(Int(TempTargetCalculations.computeAdjustedPercentage(halfBasalTarget: effectiveHBT, target: target, autosensMax: state.autosensMax)))%"
         }
-        target = state.units == .mmolL ? target.asMmolL : target
-        let targetString = target == 0 ? "" : (fetchedTargetFormatter.string(from: target as NSNumber) ?? "") + " " +
-            state.units.rawValue + percentageString
+        let targetString = target == 0 ? "" : target.formatted(withUnits: state.units) + percentageString
 
         if newDuration >= 1 {
             durationString =
@@ -228,26 +216,35 @@ extension Home.RootView {
             .onTapGesture {
                 cancelAction()
             }
+            .accessibilityLabel(Text("Stop adjustment"))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { cancelAction() }
     }
 
     @ViewBuilder func adjustmentsCancelTempTargetView() -> some View {
         Image(systemName: "xmark.app")
             .font(.title)
-            .confirmationDialog(
+            .glassActionSheet(
                 "Stop the Temp Target \"\(latestTempTarget.first?.name ?? "")\"?",
                 isPresented: $isConfirmStopTempTargetShown,
-                titleVisibility: .visible
-            ) {
-                Button("Stop", role: .destructive) {
-                    Task {
-                        guard let objectID = latestTempTarget.first?.objectID else { return }
-                        await state.cancelTempTarget(withID: objectID)
+                actions: [
+                    GlassSheetAction("Stop", role: .destructive) {
+                        Task {
+                            guard let objectID = latestTempTarget.first?.objectID else { return }
+                            await state.cancelTempTarget(withID: objectID)
+                        }
                     }
-                }
-                Button("Cancel", role: .cancel) {}
-            }
+                ]
+            )
             .padding(.trailing, 8)
             .onTapGesture {
+                if !latestTempTarget.isEmpty {
+                    isConfirmStopTempTargetShown = true
+                }
+            }
+            .accessibilityLabel(Text("Stop temp target"))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
                 if !latestTempTarget.isEmpty {
                     isConfirmStopTempTargetShown = true
                 }
@@ -257,21 +254,27 @@ extension Home.RootView {
     @ViewBuilder func adjustmentsCancelOverrideView() -> some View {
         Image(systemName: "xmark.app")
             .font(.title)
-            .confirmationDialog(
+            .glassActionSheet(
                 "Stop the Override \"\(latestOverride.first?.name ?? "")\"?",
                 isPresented: $isConfirmStopOverridePresented,
-                titleVisibility: .visible
-            ) {
-                Button("Stop", role: .destructive) {
-                    Task {
-                        guard let objectID = latestOverride.first?.objectID else { return }
-                        await state.cancelOverride(withID: objectID)
+                actions: [
+                    GlassSheetAction("Stop", role: .destructive) {
+                        Task {
+                            guard let objectID = latestOverride.first?.objectID else { return }
+                            await state.cancelOverride(withID: objectID)
+                        }
                     }
-                }
-                Button("Cancel", role: .cancel) {}
-            }
+                ]
+            )
             .padding(.trailing, 8)
             .onTapGesture {
+                if !latestOverride.isEmpty {
+                    isConfirmStopOverridePresented = true
+                }
+            }
+            .accessibilityLabel(Text("Stop override"))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
                 if !latestOverride.isEmpty {
                     isConfirmStopOverridePresented = true
                 }
@@ -372,31 +375,34 @@ extension Home.RootView {
                     noActiveAdjustmentsView()
                 }
             }.padding(.horizontal, 10)
-                .confirmationDialog("Adjustment to Stop", isPresented: $showCancelConfirmDialog) {
-                    Button("Stop Override", role: .destructive) {
-                        Task {
-                            guard let objectID = latestOverride.first?.objectID else { return }
-                            await state.cancelOverride(withID: objectID)
-                        }
-                    }
-                    Button("Stop Temp Target", role: .destructive) {
-                        Task {
-                            guard let objectID = latestTempTarget.first?.objectID else { return }
-                            await state.cancelTempTarget(withID: objectID)
-                        }
-                    }
-                    Button("Stop All Adjustments", role: .destructive) {
-                        Task {
-                            guard let overrideObjectID = latestOverride.first?.objectID else { return }
-                            await state.cancelOverride(withID: overrideObjectID)
+                .glassActionSheet(
+                    "Adjustment to Stop",
+                    message: Text("Select Adjustment"),
+                    isPresented: $showCancelConfirmDialog,
+                    actions: [
+                        GlassSheetAction("Stop Override", role: .destructive) {
+                            Task {
+                                guard let objectID = latestOverride.first?.objectID else { return }
+                                await state.cancelOverride(withID: objectID)
+                            }
+                        },
+                        GlassSheetAction("Stop Temp Target", role: .destructive) {
+                            Task {
+                                guard let objectID = latestTempTarget.first?.objectID else { return }
+                                await state.cancelTempTarget(withID: objectID)
+                            }
+                        },
+                        GlassSheetAction("Stop All Adjustments", role: .destructive) {
+                            Task {
+                                guard let overrideObjectID = latestOverride.first?.objectID else { return }
+                                await state.cancelOverride(withID: overrideObjectID)
 
-                            guard let tempTargetObjectID = latestTempTarget.first?.objectID else { return }
-                            await state.cancelTempTarget(withID: tempTargetObjectID)
+                                guard let tempTargetObjectID = latestTempTarget.first?.objectID else { return }
+                                await state.cancelTempTarget(withID: tempTargetObjectID)
+                            }
                         }
-                    }
-                } message: {
-                    Text("Select Adjustment")
-                }
+                    ]
+                )
         }
         .frame(height: HomeLayout.bottomPanelHeight)
         .glassPanel(
@@ -437,6 +443,9 @@ extension Home.RootView {
         .onTapGesture {
             selectedTab = 2
         }
+        .accessibilityHint(Text(String(localized: "Opens adjustments", comment: "Accessibility hint")))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { selectedTab = 2 }
         .padding(.horizontal, 10)
     }
 
@@ -457,6 +466,7 @@ extension Home.RootView {
             HStack {
                 Image(systemName: "cross.vial.fill")
                     .font(.system(size: 25))
+                    .accessibilityHidden(true)
 
                 Spacer()
 
@@ -468,6 +478,9 @@ extension Home.RootView {
                         .font(.caption)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }.padding(.leading, 5)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(bolusLabel))
+                    .accessibilityValue(Text(bolusString))
 
                 Spacer()
 
@@ -479,6 +492,7 @@ extension Home.RootView {
                         Image(systemName: "xmark.app")
                             .font(.system(size: 25))
                     }
+                    .accessibilityLabel(Text("Cancel bolus"))
                 } else if state.bolusStatus == .initiating {
                     ProgressView()
                 }
@@ -513,26 +527,8 @@ extension Home.RootView {
         }
     }
 
-    /// Mean glucose (mg/dL) of today's readings, nil without data.
-    private var todayMeanGlucose: Double? {
-        let startOfDay = Calendar.current.startOfDay(for: Date())
-        let values = state.glucoseFromPersistence
-            .filter { ($0.date ?? .distantPast) >= startOfDay }
-            .map { Double($0.glucose) }
-        guard !values.isEmpty else { return nil }
-        return values.reduce(0, +) / Double(values.count)
-    }
-
-    private var todayAverageString: String {
-        guard let mean = todayMeanGlucose else { return "--" }
-        if state.units == .mmolL {
-            return Decimal(mean).asMmolL.formatted(.number.precision(.fractionLength(1))) + " " + GlucoseUnits.mmolL.rawValue
-        }
-        return "\(Int(mean.rounded())) " + GlucoseUnits.mgdL.rawValue
-    }
-
-    private var todayGMIString: String {
-        guard let mean = todayMeanGlucose else { return "--" }
+    private func gmiString(_ meanGlucose: Double?) -> String {
+        guard let mean = meanGlucose else { return "--" }
         let gmiPercentage = 3.31 + 0.02392 * mean
         // settingsManager is injected after first render; default until then
         if state.settingsManager?.settings.eA1cDisplayUnit == .mmolMol {
@@ -544,18 +540,19 @@ extension Home.RootView {
 
     @ViewBuilder func statsBanner() -> some View {
         let face = state.settingsManager?.settings.homeStatsPanelFace ?? .timeInRange
-        let distribution = state.todayGlucoseDistribution
-        let coveragePct = distribution.veryLowPct + distribution.lowPct + distribution.inRangePct + distribution
-            .highPct + distribution.veryHighPct
-        let hasData = coveragePct > 0
+        let range = state.homeStatsPanelRange
+        let stats = state.statsPanelStats
+        let hasData = stats.hasData
+        let averageString = stats.meanGlucose?.formatted(withUnits: state.units) ?? "--"
+        let gmiValueString = gmiString(stats.meanGlucose)
         let tirString = hasData
-            ? distribution.inRangePct.formatted(.number.precision(.fractionLength(0 ... 1))) + " %"
+            ? stats.inRangePct.formatted(.number.precision(.fractionLength(0 ... 1))) + " %"
             : "-- %"
         let segments: [(color: Color, fraction: CGFloat)] = hasData ? [
-            (.red, CGFloat(distribution.veryLowPct / 100)),
-            (.orange, CGFloat(distribution.lowPct / 100)),
-            (.loopGreen, CGFloat(distribution.inRangePct / 100)),
-            (.purple, CGFloat((distribution.highPct + distribution.veryHighPct) / 100))
+            (.red, CGFloat(stats.veryLowPct / 100)),
+            (.orange, CGFloat(stats.lowPct / 100)),
+            (.loopGreen, CGFloat(stats.inRangePct / 100)),
+            (.purple, CGFloat((stats.highPct + stats.veryHighPct) / 100))
         ] : [(Color.secondary.opacity(0.3), 1)]
 
         Button {
@@ -570,11 +567,11 @@ extension Home.RootView {
                                 Text(tirString)
                                     .font(.title2).fontWeight(.bold).fontDesign(.rounded)
                                     .foregroundStyle(.primary)
-                                // chart shows 72h; make the daily scope explicit
+                                // chart shows 72h; make the reported scope explicit
                                 (
                                     Text("Time in Range", comment: "Stats banner subtitle").fontWeight(.semibold)
                                         + Text(" ")
-                                        + Text("today", comment: "Stats banner scope")
+                                        + Text(range.scopeName)
                                 )
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -590,7 +587,7 @@ extension Home.RootView {
                             (
                                 Text("Time in Range", comment: "Stats banner subtitle").fontWeight(.semibold)
                                     + Text(" ")
-                                    + Text("today", comment: "Stats banner scope")
+                                    + Text(range.scopeName)
                             )
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -601,14 +598,24 @@ extension Home.RootView {
                                 .frame(height: 6)
                         }
                     case .averages:
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("\u{2300} \(todayAverageString) \u{00B7} GMI \(todayGMIString)")
-                                .font(.subheadline).fontWeight(.semibold)
-                                .foregroundStyle(.primary)
-                            Text("Today's average", comment: "Stats banner subtitle")
+                        VStack(alignment: .leading, spacing: 6) {
+                            // "⌀" read as a diameter sign, so spell the label out (#1474)
+                            (
+                                Text("Avg. Glucose:", comment: "Stats banner label")
+                                    + Text(" \(averageString) \u{00B7} GMI \(gmiValueString)")
+                            )
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            Text(range.averageSubtitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                    case .hidden:
+                        Text("View Statistics", comment: "Stats banner hidden face")
+                            .font(.subheadline).fontWeight(.semibold)
+                            .foregroundStyle(.secondary)
                     }
 
                     Spacer(minLength: 8)
@@ -633,6 +640,8 @@ extension Home.RootView {
             pumpTimeMismatch: state.pumpStatusBadgeImage != nil,
             lastGlucoseDate: state.glucoseFromPersistence.last?.date,
             maxIOB: state.maxIOB,
+            hasUnacknowledgedReleaseNotes: releaseNotesService.hasUnacknowledgedNotes,
+            dosingMode: state.dosingMode,
             now: state.timerDate
         )
     }
@@ -644,6 +653,9 @@ extension Home.RootView {
         subtitle: String,
         tint: Color,
         isCritical: Bool = false,
+        tintOpacity: Double? = nil,
+        strokeOpacity: Double? = nil,
+        strokeWidth: CGFloat? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -671,9 +683,9 @@ extension Home.RootView {
             .frame(height: HomeLayout.statsBannerHeight)
             .glassPanel(
                 tint: tint,
-                tintOpacity: isCritical ? 0.30 : 0.12,
-                strokeOpacity: isCritical ? 0.8 : 0.35,
-                strokeWidth: isCritical ? 1.5 : 1
+                tintOpacity: tintOpacity ?? (isCritical ? 0.30 : 0.12),
+                strokeOpacity: strokeOpacity ?? (isCritical ? 0.8 : 0.35),
+                strokeWidth: strokeWidth ?? (isCritical ? 1.5 : 1)
             )
             .padding(.horizontal, 10)
             .contentShape(Rectangle())
@@ -723,9 +735,38 @@ extension Home.RootView {
             ) {
                 openMaxIOBSetting()
             }
+        case .whatsNew:
+            panelBanner(
+                systemImage: "sparkles",
+                title: String(
+                    localized: "New Release v\(releaseNotesService.notes?.version ?? "")",
+                    comment: "Home panel title offering the release notes; the placeholder is a version number"
+                ),
+                subtitle: String(localized: "See what's new in this version."),
+                tint: .insulin,
+                tintOpacity: 0.24,
+                strokeOpacity: 0.7,
+                strokeWidth: 1.5
+            ) {
+                showReleaseNotes = true
+            }
+        case let .dosingModeLimited(mode):
+            panelBanner(
+                systemImage: mode.icon,
+                title: mode.displayName,
+                subtitle: mode.miniHint,
+                tint: .orange
+            ) {
+                openDosingModeSetting()
+            }
         case .stats:
             statsBanner()
         }
+    }
+
+    /// The mode picker sits on the Settings root, so there is no sub-screen target to push.
+    func openDosingModeSetting() {
+        selectedTab = 3
     }
 
     func openMaxIOBSetting() {

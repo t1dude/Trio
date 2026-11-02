@@ -3,6 +3,7 @@ import CoreData
 import CryptoKit
 import Foundation
 import HealthKit
+import LoopAlgorithm
 import LoopKit
 import LoopKitUI
 import Swinject
@@ -54,7 +55,7 @@ final class BaseTidepoolManager: TidepoolManager, Injectable {
 
     /// Last-seen therapy-relevant TrioSettings values.
     /// Used to filter `settingsDidChange` so UI-only changes don't trigger uploads.
-    private var lastClosedLoop: Bool?
+    private var lastDosingMode: DosingMode?
     private var lastUnits: GlucoseUnits?
     private var tidepoolService: RemoteDataService? {
         didSet {
@@ -166,7 +167,7 @@ final class BaseTidepoolManager: TidepoolManager, Injectable {
                 try self.carbsUploadController.performFetch()
                 try self.insulinUploadController.performFetch()
             } catch {
-                debug(.service, "\(DebuggingIdentifiers.failed) Failed to set up Tidepool upload controllers: \(error)")
+                warning(.tidepool, "Failed to set up Tidepool upload controllers", error: error)
             }
         }
 
@@ -257,7 +258,7 @@ extension BaseTidepoolManager: ServiceDelegate {
         startDate _: Date?
     ) async throws {}
 
-    func deliverRemoteBolus(amountInUnits _: Double) async throws {}
+    func deliverRemoteBolus(amountInUnits _: Double, decisionId _: UUID?) async throws {}
 }
 
 /// Carb Upload and Deletion Functionality
@@ -277,7 +278,7 @@ extension BaseTidepoolManager {
         do {
             carbs = try await carbsStorage.getCarbsNotYetUploadedToTidepool()
         } catch {
-            debug(.service, "\(DebuggingIdentifiers.failed) Failed to fetch carbs for upload: \(error)")
+            warning(.tidepool, "Failed to load pending carbs for Tidepool upload", error: error)
             return
         }
         guard !carbs.isEmpty else { return }
@@ -287,17 +288,17 @@ extension BaseTidepoolManager {
 
             let syncCarb: [SyncCarbObject] = Array(chunk).map { $0.convertSyncCarb() }
 
-            let result = await TidepoolUploadSerializer.awaitUpload("carbs") { completion in
-                tidepoolService.uploadCarbData(created: syncCarb, updated: [], deleted: [], completion: completion)
+            let result = await TidepoolUploadSerializer.awaitUpload("carbs") {
+                try await tidepoolService.uploadCarbData(created: syncCarb, updated: [], deleted: [])
             }
 
             switch result {
             case .success:
-                debug(.service, "Success synchronizing carbs data. Upload to Tidepool complete.")
+                info(.tidepool, "Uploaded \(chunk.count) carb entries to Tidepool")
                 // After successful upload, update the isUploadedToTidepool flag in Core Data
                 await updateCarbsAsUploaded(Array(chunk))
             case let .failure(error):
-                debug(.service, "Error synchronizing carbs data with Tidepool: \(String(describing: error))")
+                warning(.tidepool, "Tidepool upload of \(chunk.count) carb entries failed", error: error)
             }
         }
     }
@@ -319,9 +320,7 @@ extension BaseTidepoolManager {
                 guard context.hasChanges else { return }
                 try context.save()
             } catch let error as NSError {
-                debugPrint(
-                    "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to update isUploadedToTidepool: \(error.userInfo)"
-                )
+                warning(.storage, "Failed to mark carb entries as uploaded to Tidepool", error: error)
             }
         }
     }
@@ -349,14 +348,14 @@ extension BaseTidepoolManager {
 
         Task { [weak self] in
             await self?.uploadSerializer.enqueue(.carbsDelete) { _ in
-                let result = await TidepoolUploadSerializer.awaitUpload("carbs-delete") { completion in
-                    tidepoolService.uploadCarbData(created: [], updated: [], deleted: syncCarb, completion: completion)
+                let result = await TidepoolUploadSerializer.awaitUpload("carbs-delete") {
+                    try await tidepoolService.uploadCarbData(created: [], updated: [], deleted: syncCarb)
                 }
                 switch result {
                 case .success:
-                    debug(.service, "Success synchronizing carbs delete data. Upload to Tidepool complete.")
+                    debug(.tidepool, "Carb entry deletion synced to Tidepool")
                 case let .failure(error):
-                    debug(.service, "Error synchronizing carbs delete data with Tidepool: \(String(describing: error))")
+                    warning(.tidepool, "Tidepool carb entry deletion failed", error: error)
                 }
             }
         }
@@ -381,7 +380,7 @@ extension BaseTidepoolManager {
         do {
             events = try await pumpHistoryStorage.getPumpHistoryNotYetUploadedToTidepool()
         } catch {
-            debug(.service, "Error fetching pump history: \(error)")
+            warning(.tidepool, "Failed to load pending pump history for Tidepool upload", error: error)
             return
         }
         guard !events.isEmpty else { return }
@@ -420,16 +419,19 @@ extension BaseTidepoolManager {
                                 )
                         case .bolus:
                             guard let amount = event.amount else { return result }
+                            // an interrupted bolus programmed more than it delivered
+                            let programmed = event.programmedAmount ?? amount
                             let bolusDoseEntry = DoseEntry(
                                 type: .bolus,
                                 startDate: event.timestamp,
                                 endDate: event.timestamp,
-                                value: Double(amount),
+                                value: Double(programmed),
                                 unit: .units,
-                                deliveredUnits: nil,
+                                decisionId: nil,
+                                deliveredUnits: Double(amount),
                                 syncIdentifier: event.id,
                                 scheduledBasalRate: nil,
-                                insulinType: self.apsManager.pumpManager?.status.insulinType ?? nil,
+                                insulinType: self.insulinType(for: event),
                                 automatic: event.isSMB ?? true,
                                 manuallyEntered: event.isExternal ?? false
                             )
@@ -440,7 +442,7 @@ extension BaseTidepoolManager {
                         return result
                     }
 
-                    debug(.service, "Uploading \(insulinDoseEvents.count) dose entries to Tidepool")
+                    debug(.tidepool, "Uploading \(insulinDoseEvents.count) dose entries to Tidepool")
 
                     let pumpEvents: [PersistedPumpEvent] = events.compactMap { event -> PersistedPumpEvent? in
                         if let pumpEventType = event.type.mapEventTypeToPumpEventType() {
@@ -471,35 +473,35 @@ extension BaseTidepoolManager {
                     return (insulinDoseEvents, pumpEvents)
                 }
 
-            let doseResult = await TidepoolUploadSerializer.awaitUpload("dose") { completion in
-                tidepoolService.uploadDoseData(created: insulinDoseEvents, deleted: [], completion: completion)
+            let doseResult = await TidepoolUploadSerializer.awaitUpload("dose") {
+                try await tidepoolService.uploadDoseData(created: insulinDoseEvents, deleted: [])
             }
             switch doseResult {
             case .success:
-                debug(.service, "Success synchronizing dose data. Upload to Tidepool complete.")
+                info(.tidepool, "Uploaded \(insulinDoseEvents.count) dose entries to Tidepool")
                 let insulinEvents = events.filter {
                     $0.type == .tempBasal || $0.type == .tempBasalDuration || $0.type == .bolus
                 }
                 await updateInsulinAsUploaded(insulinEvents)
             case let .failure(error):
-                debug(.service, "Error synchronizing dose data with Tidepool: \(String(describing: error))")
+                warning(.tidepool, "Tidepool upload of \(insulinDoseEvents.count) dose entries failed", error: error)
             }
 
             guard await uploadSerializer.isCurrent(generation) else { return }
 
-            let pumpResult = await TidepoolUploadSerializer.awaitUpload("pumpEvents") { completion in
-                tidepoolService.uploadPumpEventData(pumpEvents, completion: completion)
+            let pumpResult = await TidepoolUploadSerializer.awaitUpload("pumpEvents") {
+                try await tidepoolService.uploadPumpEventData(pumpEvents)
             }
             switch pumpResult {
             case .success:
-                debug(.service, "Success synchronizing pump events data. Upload to Tidepool complete.")
+                info(.tidepool, "Uploaded \(pumpEvents.count) pump events to Tidepool")
                 let pumpEventsToMark = events.filter { $0.type.mapEventTypeToPumpEventType() != nil }
                 await updateInsulinAsUploaded(pumpEventsToMark)
             case let .failure(error):
-                debug(.service, "Error synchronizing pump events data: \(String(describing: error))")
+                warning(.tidepool, "Tidepool upload of \(pumpEvents.count) pump events failed", error: error)
             }
         } catch {
-            debug(.service, "Error fetching temp basal entries: \(error)")
+            warning(.tidepool, "Failed to prepare dose entries for Tidepool upload", error: error)
         }
     }
 
@@ -520,9 +522,7 @@ extension BaseTidepoolManager {
                 guard context.hasChanges else { return }
                 try context.save()
             } catch let error as NSError {
-                debugPrint(
-                    "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to update isUploadedToTidepool: \(error.userInfo)"
-                )
+                warning(.storage, "Failed to mark pump events as uploaded to Tidepool", error: error)
             }
         }
     }
@@ -536,19 +536,20 @@ extension BaseTidepoolManager {
             startDate: at,
             value: Double(amount),
             unit: .units,
+            decisionId: nil,
             syncIdentifier: id
         )]
 
         Task { [weak self] in
             await self?.uploadSerializer.enqueue(.doseDelete) { _ in
-                let result = await TidepoolUploadSerializer.awaitUpload("dose-delete") { completion in
-                    tidepoolService.uploadDoseData(created: [], deleted: doseDataToDelete, completion: completion)
+                let result = await TidepoolUploadSerializer.awaitUpload("dose-delete") {
+                    try await tidepoolService.uploadDoseData(created: [], deleted: doseDataToDelete)
                 }
                 switch result {
                 case .success:
-                    debug(.service, "Success synchronizing Dose delete data")
+                    debug(.tidepool, "Dose deletion synced to Tidepool")
                 case let .failure(error):
-                    debug(.service, "Error synchronizing Dose delete data: \(String(describing: error))")
+                    warning(.tidepool, "Tidepool dose deletion failed", error: error)
                 }
             }
         }
@@ -557,6 +558,21 @@ extension BaseTidepoolManager {
 
 /// Insulin Helper Functions
 extension BaseTidepoolManager {
+    /// Insulin type recorded with the dose; the pump's current type is only a
+    /// fallback for rows stored before it was persisted per event.
+    private func insulinType(for storedIdentifier: String?) -> InsulinType? {
+        if let storedIdentifier, let insulinType = InsulinType(identifier: storedIdentifier) {
+            return insulinType
+        }
+        return apsManager.pumpManager?.status.insulinType
+    }
+
+    private func insulinType(for event: PumpHistoryEvent) -> InsulinType? {
+        // external doses are not the pump's insulin, so don't fall back to its type
+        guard event.isExternal != true else { return nil }
+        return insulinType(for: event.insulinType)
+    }
+
     private func processTempBasalEvent(
         _ event: PumpHistoryEvent,
         existingTempBasalEntries: [PumpEventStored]
@@ -569,7 +585,8 @@ extension BaseTidepoolManager {
         else {
             return insulinDoseEvents
         }
-        let value = (Decimal(duration) / 60.0) * amount
+        // pump-reported delivery wins; rate x duration is the fallback
+        let value = event.deliveredUnits ?? (Decimal(duration) / 60.0) * amount
 
         // Find the corresponding temp basal entry in existingTempBasalEntries
         if let matchingEntryIndex = existingTempBasalEntries.firstIndex(where: { $0.timestamp == event.timestamp }) {
@@ -590,8 +607,10 @@ extension BaseTidepoolManager {
                     if predecessorEndDate > event.timestamp {
                         let adjustedEndDate = event.timestamp
                         let adjustedDuration = adjustedEndDate.timeIntervalSince(predecessorTimestamp)
-                        let adjustedDeliveredUnits = (adjustedDuration / 3600) *
-                            Double(truncating: predecessorEntry.tempBasal?.rate ?? 0)
+                        // a finalized row already reports what the truncated span delivered
+                        let adjustedDeliveredUnits = predecessorEntry.tempBasal?.deliveredUnits
+                            .map { Double(truncating: $0) }
+                            ?? (adjustedDuration / 3600) * Double(truncating: predecessorEntry.tempBasal?.rate ?? 0)
 
                         // Create updated predecessor dose entry
                         let updatedPredecessorEntry = DoseEntry(
@@ -600,9 +619,10 @@ extension BaseTidepoolManager {
                             endDate: adjustedEndDate,
                             value: adjustedDeliveredUnits,
                             unit: .units,
+                            decisionId: nil,
                             deliveredUnits: adjustedDeliveredUnits,
                             syncIdentifier: predecessorEntrySyncIdentifier,
-                            insulinType: apsManager.pumpManager?.status.insulinType ?? nil,
+                            insulinType: insulinType(for: predecessorEntry.insulinType),
                             automatic: true,
                             manuallyEntered: false,
                             isMutable: false
@@ -621,13 +641,14 @@ extension BaseTidepoolManager {
                 endDate: currentEndDate,
                 value: Double(value),
                 unit: .units,
+                decisionId: nil,
                 deliveredUnits: Double(value),
                 syncIdentifier: event.id,
-                scheduledBasalRate: HKQuantity(
+                scheduledBasalRate: LoopQuantity(
                     unit: .internationalUnitsPerHour,
                     doubleValue: Double(currentBasalRate.rate)
                 ),
-                insulinType: apsManager.pumpManager?.status.insulinType ?? nil,
+                insulinType: insulinType(for: event),
                 automatic: true,
                 manuallyEntered: false,
                 isMutable: false
@@ -651,7 +672,7 @@ extension BaseTidepoolManager {
 
         for (index, entry) in basalEntries.enumerated() {
             guard let entryTime = TherapySettingsUtil.parseTime(entry.start) else {
-                debug(.default, "Invalid entry start time: \(entry.start)")
+                warning(.settings, "Basal profile entry has invalid start time \(entry.start)")
                 continue
             }
 
@@ -707,7 +728,7 @@ extension BaseTidepoolManager {
             let manualGlucose = try await glucoseStorage.getManualGlucoseNotYetUploadedToTidepool()
             glucose = cgmGlucose + manualGlucose
         } catch {
-            debug(.service, "Error fetching glucose data: \(error)")
+            warning(.tidepool, "Failed to load pending glucose for Tidepool upload", error: error)
             return
         }
         guard !glucose.isEmpty else { return }
@@ -715,17 +736,17 @@ extension BaseTidepoolManager {
         for chunk in glucose.chunks(ofCount: tidepoolService.glucoseDataLimit ?? 100) {
             guard await uploadSerializer.isCurrent(generation) else { return }
 
-            let result = await TidepoolUploadSerializer.awaitUpload("glucose") { completion in
-                tidepoolService.uploadGlucoseData(chunk, completion: completion)
+            let result = await TidepoolUploadSerializer.awaitUpload("glucose") {
+                try await tidepoolService.uploadGlucoseData(chunk)
             }
 
             switch result {
             case .success:
-                debug(.service, "Success synchronizing glucose data")
+                info(.tidepool, "Uploaded \(chunk.count) glucose values to Tidepool")
                 // After successful upload, update the isUploadedToTidepool flag in Core Data
                 await updateGlucoseAsUploaded(Array(chunk))
             case let .failure(error):
-                debug(.service, "Error synchronizing glucose data: \(String(describing: error))")
+                warning(.tidepool, "Tidepool upload of \(chunk.count) glucose values failed", error: error)
             }
         }
     }
@@ -747,9 +768,7 @@ extension BaseTidepoolManager {
                 guard context.hasChanges else { return }
                 try context.save()
             } catch let error as NSError {
-                debugPrint(
-                    "\(DebuggingIdentifiers.failed) \(#file) \(#function) Failed to update isUploadedToTidepool: \(error.userInfo)"
-                )
+                warning(.storage, "Failed to mark glucose as uploaded to Tidepool", error: error)
             }
         }
     }
@@ -801,14 +820,14 @@ extension BaseTidepoolManager {
             return
         }
 
-        let result = await TidepoolUploadSerializer.awaitUpload("settings") { completion in
-            tidepoolService.uploadSettingsData([settings], completion: completion)
+        let result = await TidepoolUploadSerializer.awaitUpload("settings") {
+            try await tidepoolService.uploadSettingsData([settings])
         }
         switch result {
         case .success:
-            debug(.service, "Settings uploaded to Tidepool (syncId: \(settings.syncIdentifier))")
+            info(.tidepool, "Settings uploaded to Tidepool")
         case let .failure(error):
-            debug(.service, "Failed to upload settings to Tidepool: \(error)")
+            warning(.tidepool, "Tidepool settings upload failed", error: error)
         }
     }
 }
@@ -819,13 +838,13 @@ extension BaseTidepoolManager: SettingsObserver {
     func settingsDidChange(_ settings: TrioSettings) {
         // Only trigger upload when therapy-relevant properties change.
         // TrioSettings has ~56 properties, most are UI-only (badges, colors, etc.).
-        let closedLoopChanged = lastClosedLoop != settings.closedLoop
+        let dosingModeChanged = lastDosingMode != settings.dosingMode
         let unitsChanged = lastUnits != settings.units
 
-        lastClosedLoop = settings.closedLoop
+        lastDosingMode = settings.dosingMode
         lastUnits = settings.units
 
-        guard closedLoopChanged || unitsChanged else { return }
+        guard dosingModeChanged || unitsChanged else { return }
         scheduleSettingsUpload()
     }
 }
@@ -859,7 +878,7 @@ extension BaseTidepoolManager {
             ),
             let bgTargets: BGTargets = storage.retrieve(OpenAPS.Settings.bgTargets, as: BGTargets.self)
         else {
-            debug(.service, "Failed to load Trio therapy settings for Tidepool upload")
+            warning(.tidepool, "Tidepool settings upload skipped: therapy settings could not be loaded")
             return nil
         }
 
@@ -872,7 +891,7 @@ extension BaseTidepoolManager {
         let glucoseTargetRangeSchedule = convertBGTargets(bgTargets)
 
         let pumpDevice = apsManager.pumpManager?.status.device
-        let bgUnit: HKUnit = settingsManager.settings.units == .mmolL ? .millimolesPerLiter : .milligramsPerDeciliter
+        let bgUnit: LoopUnit = settingsManager.settings.units == .mmolL ? .millimolesPerLiter : .milligramsPerDeciliter
 
         // threshold_setting is always stored in mg/dL; TidepoolServiceKit calls
         // convertTo(unit:) internally, so we pass it through in its native unit
@@ -884,13 +903,10 @@ extension BaseTidepoolManager {
         return StoredSettings(
             date: Date(),
             controllerTimeZone: TimeZone.current,
-            dosingEnabled: settingsManager.settings.closedLoop,
+            dosingEnabled: settingsManager.settings.dosingMode.automation != .off,
             glucoseTargetRangeSchedule: glucoseTargetRangeSchedule,
             preMealTargetRange: nil,
-            workoutTargetRange: nil,
-            overridePresets: nil,
-            scheduleOverride: nil,
-            preMealOverride: nil,
+            overridePresets: [],
             maximumBasalRatePerHour: Double(pumpSettings.maxBasal),
             maximumBolus: Double(pumpSettings.maxBolus),
             suspendThreshold: suspendThreshold,
@@ -911,7 +927,7 @@ extension BaseTidepoolManager {
                 bgTargets: bgTargets,
                 pumpSettings: pumpSettings,
                 preferences: preferences,
-                dosingEnabled: settingsManager.settings.closedLoop
+                dosingMode: settingsManager.settings.dosingMode
             )
         )
     }
@@ -929,12 +945,12 @@ extension BaseTidepoolManager {
             let startTime = TimeInterval(entry.offset * 60)
             return RepeatingScheduleValue(startTime: startTime, value: Double(entry.ratio))
         }
-        return CarbRatioSchedule(unit: .gram(), dailyItems: items, timeZone: TimeZone.current)
+        return CarbRatioSchedule(unit: .gram, dailyItems: items, timeZone: TimeZone.current)
     }
 
     private func convertInsulinSensitivities(_ sensitivities: InsulinSensitivities) -> InsulinSensitivitySchedule? {
         // sensitivities.units comes from the data model itself, not the user's display preference
-        let unit: HKUnit = sensitivities.units == .mgdL ? .milligramsPerDeciliter : .millimolesPerLiter
+        let unit: LoopUnit = sensitivities.units == .mgdL ? .milligramsPerDeciliter : .millimolesPerLiter
         let items = sensitivities.sensitivities.map { entry in
             let startTime = TimeInterval(entry.offset * 60)
             return RepeatingScheduleValue(startTime: startTime, value: Double(entry.sensitivity))
@@ -944,7 +960,7 @@ extension BaseTidepoolManager {
 
     private func convertBGTargets(_ bgTargets: BGTargets) -> GlucoseRangeSchedule? {
         // bgTargets.units comes from the data model itself, not the user's display preference
-        let unit: HKUnit = bgTargets.units == .mgdL ? .milligramsPerDeciliter : .millimolesPerLiter
+        let unit: LoopUnit = bgTargets.units == .mgdL ? .milligramsPerDeciliter : .millimolesPerLiter
         let items = bgTargets.targets.map { entry in
             let startTime = TimeInterval(entry.offset * 60)
             let minValue = Double(entry.low)
@@ -1000,7 +1016,7 @@ extension BaseTidepoolManager {
         bgTargets: BGTargets,
         pumpSettings: PumpSettings,
         preferences: Preferences?,
-        dosingEnabled: Bool
+        dosingMode: DosingMode
     ) -> UUID {
         var hasher = SHA256()
 
@@ -1024,7 +1040,7 @@ extension BaseTidepoolManager {
             hasher.update(data: Data("threshold:\(prefs.threshold_setting)".utf8))
         }
 
-        hasher.update(data: Data("dosingEnabled:\(dosingEnabled)".utf8))
+        hasher.update(data: Data("dosingMode:\(dosingMode.rawValue)".utf8))
 
         let digest = hasher.finalize()
         let bytes = Array(digest.prefix(16))

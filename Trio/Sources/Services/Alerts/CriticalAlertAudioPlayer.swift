@@ -1,18 +1,19 @@
 import AudioToolbox
 import AVFoundation
 import MediaPlayer
-import os.log
 import UIKit
 
 @MainActor
 final class CriticalAlertAudioPlayer {
-    private let log = OSLog(subsystem: "org.nightscout.Trio", category: "CriticalAlertAudioPlayer")
-
     private var player: AVAudioPlayer?
     private var vibrationTimer: Timer?
 
     private let vibrationInterval: TimeInterval = 2.0
-    private let boostedVolume: Float = 1.0
+    /// System volume floor for critical alarms. The alarm has to be audible
+    /// with the ringer down, but forcing 100% wakes the whole household and
+    /// leaves the user no way to turn it down. Raise only up to this floor;
+    /// anything already louder is left alone.
+    private let minimumSystemVolume: Float = 0.5
     private let volumeBooster = SystemVolumeBooster()
 
     var isPlaying: Bool { player?.isPlaying ?? false }
@@ -30,15 +31,10 @@ final class CriticalAlertAudioPlayer {
 
         let resource = (soundName as NSString).deletingPathExtension
         let ext = (soundName as NSString).pathExtension.isEmpty ? "caf" : (soundName as NSString).pathExtension
-        let url = Bundle.main.url(forResource: resource, withExtension: ext, subdirectory: "Sounds")
-            ?? Bundle.main.url(forResource: "critical", withExtension: "caf", subdirectory: "Sounds")
+        let url = Bundle.main.url(forResource: resource, withExtension: ext)
+            ?? Bundle.main.url(forResource: "critical", withExtension: "caf")
         guard let url else {
-            os_log(
-                "Neither %{public}@ nor critical.caf found in main bundle; audio fallback unavailable",
-                log: log,
-                type: .error,
-                soundName
-            )
+            error(.alerts, "Critical alert sound \(soundName) and fallback sound missing, audio fallback unavailable")
             return
         }
 
@@ -54,21 +50,21 @@ final class CriticalAlertAudioPlayer {
             // silent switch.
             try session.setCategory(.playback, mode: .default, options: [.duckOthers, .mixWithOthers])
             try session.setActive(true, options: [])
-            volumeBooster.boost(to: boostedVolume)
+            volumeBooster.boost(to: minimumSystemVolume)
 
             let p = try AVAudioPlayer(contentsOf: url)
             p.numberOfLoops = -1
             p.volume = 1.0
             p.prepareToPlay()
             guard p.play() else {
-                os_log("AVAudioPlayer.play() returned false for %{public}@", log: log, type: .error, url.lastPathComponent)
+                error(.alerts, "Critical alert audio did not start for \(url.lastPathComponent)")
                 try? session.setActive(false, options: [.notifyOthersOnDeactivation])
                 return
             }
             player = p
-            os_log("Started critical-alert audio playback (duration=%{public}.2fs)", log: log, type: .info, p.duration)
-        } catch {
-            os_log("Failed to start audio playback: %{public}@", log: log, type: .error, String(describing: error))
+            info(.alerts, "Critical alert audio started, sound length \(String(format: "%.2f", p.duration)) s")
+        } catch let playbackError {
+            error(.alerts, "Critical alert audio playback failed", error: playbackError)
         }
     }
 
@@ -88,7 +84,7 @@ final class CriticalAlertAudioPlayer {
         vibrationTimer = nil
         volumeBooster.restore()
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
-        os_log("Stopped critical-alert audio playback", log: log, type: .info)
+        debug(.alerts, "Critical alert audio stopped")
     }
 }
 
@@ -100,11 +96,13 @@ final class CriticalAlertAudioPlayer {
 /// without the Critical Alerts entitlement: without it an urgent-low alarm
 /// can be silent when the ringer is down overnight.
 ///
+/// Raises the system volume to a floor, never to maximum, and never lowers a
+/// user who is already louder than the floor.
+///
 /// Best-effort: the slider only populates once the hosting view is in an
 /// on-screen window, so it may no-op when the app is fully backgrounded. The
-/// alarm's audio and vibration run regardless — this only makes them louder
-/// when it can. Pre-boost level is restored on `restore()` unless the user
-/// manually changed the volume in the meantime.
+/// alarm's audio and vibration run regardless. Pre-boost level is restored on
+/// `restore()` unless the user manually changed the volume in the meantime.
 @MainActor private final class SystemVolumeBooster {
     private let volumeView = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 1, height: 1))
     private var savedVolume: Float?

@@ -20,7 +20,7 @@ extension Home.StateModel {
                 await self.updateForecastData()
             }
         } catch {
-            debug(.default, "\(DebuggingIdentifiers.failed) Failed to perform enacted determination fetch: \(error)")
+            warning(.ui, "Fetching enacted determinations for home screen failed", error: error)
         }
     }
 
@@ -53,7 +53,7 @@ extension Home.StateModel {
             try determinationController.performFetch()
             updateDeterminationsFromController()
         } catch {
-            debug(.default, "\(DebuggingIdentifiers.failed) Failed to perform determination fetch: \(error)")
+            warning(.ui, "Fetching determinations for home screen failed", error: error)
         }
     }
 
@@ -62,5 +62,17 @@ extension Home.StateModel {
         enactedAndNonEnactedDeterminations = objects
         yAxisChartDataCobChart(determinations: objects)
         yAxisChartDataIobChart(determinations: objects)
+        updateCobProjection()
+    }
+
+    /// Refreshed here rather than off an IOB signal so the projection and the anchor it
+    /// is drawn from — `enactedAndNonEnactedDeterminations.first` — always move together.
+    /// `monitor/cob.json` is written before the determination reaches Core Data, so it is
+    /// already current by the time this fires.
+    @MainActor private func updateCobProjection() {
+        cobProjection = (fileStorage.retrieve(OpenAPS.Monitor.cob, as: [CobEntry].self) ?? [])
+            .compactMap { entry in
+                entry.time.map { ProjectionPoint(date: $0, value: NSDecimalNumber(decimal: entry.cob).doubleValue) }
+            }
     }
 }
