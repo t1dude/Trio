@@ -80630,28 +80630,6 @@
         }
       }
     },
-    "Choose the preferred lower threshold for Time in Range statistics across all charts and displays. This applies to both Time in Range (TIR, upper threshold of %@) and Time in Tight Range (TITR, upper threshold of %@)." : {
-      "comment" : "Explains that the lower threshold applies to both TIR and TITR",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose the preferred lower threshold for Time in Range statistics across all charts and displays. This applies to both Time in Range (TIR, upper threshold of %@) and Time in Tight Range (TITR, upper threshold of %@)."
-          }
-        }
-      }
-    },
-    "Choose the preferred lower threshold for Time in Range statistics." : {
-      "comment" : "Short description of the lower range threshold setting.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose the preferred lower threshold for Time in Range statistics."
-          }
-        }
-      }
-    },
     "Choose the time span the home statistics panel covers." : {
 
     },
@@ -81436,6 +81414,9 @@
           }
         }
       }
+    },
+    "Choose what the statistics panel on the home screen shows by default. Tapping the panel always opens the full statistics view.\n\nTime in Range: today's time in range percentage with a glucose distribution bar.\n\nDistribution Bar Only: just the glucose distribution bar, without the percentage.\n\nToday's Averages: today's average glucose and GMI (Glucose Management Index).\n\nHide Statistics: shows no data at all, just a \"View Statistics\" shortcut." : {
+      "extractionState" : "stale"
     },
     "Choose what the statistics panel on the home screen shows by default. Tapping the panel always opens the full statistics view.\n\nTime in Range: today's time in range percentage with a glucose distribution bar.\n\nDistribution Bar Only: just the glucose distribution bar, without the percentage.\n\nToday's Averages: today's average glucose and GMI (Glucose Management Index).\n\nToday's Treatments: insulin delivered since midnight — no glucose statistics. Announced carbs (and fat and protein, if you log them) appear once logged that day.\n\nHide Statistics: shows no data at all, just a \"View Statistics\" shortcut." : {
       "extractionState" : "stale",
@@ -136338,40 +136319,6 @@
         }
       }
     },
-    "Extended (%@)" : {
-      "comment" : "Extended lower threshold for TIR and TITR statistics",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Extended (%@)"
-          }
-        }
-      }
-    },
-    "Extended Lower Threshold" : {
-      "comment" : "Search term for the extended lower range threshold setting.",
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Extended Lower Threshold"
-          }
-        }
-      }
-    },
-    "Extended:" : {
-      "comment" : "Heading for the extended lower range threshold description.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Extended:"
-          }
-        }
-      }
-    },
     "External" : {
       "comment" : "External Insulin",
       "localizations" : {
@@ -178515,12 +178462,6 @@
       "comment" : "Stats banner scope"
     },
     "Last 7 Days" : {
-      "comment" : "Home stats panel range option"
-    },
-    "last 24 hours" : {
-      "comment" : "Stats banner scope"
-    },
-    "Last 24 Hours" : {
       "comment" : "Home stats panel range option"
     },
     "Last Blood Sugar prediction" : {
@@ -280094,40 +280035,6 @@
         }
       }
     },
-    "Standard (%@)" : {
-      "comment" : "Standard lower threshold for TIR and TITR statistics",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Standard (%@)"
-          }
-        }
-      }
-    },
-    "Standard Lower Threshold" : {
-      "comment" : "Search term for the standard lower range threshold setting.",
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Standard Lower Threshold"
-          }
-        }
-      }
-    },
-    "Standard:" : {
-      "comment" : "Heading for the standard lower range threshold description.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Standard:"
-          }
-        }
-      }
-    },
     "start" : {
       "localizations" : {
         "bg" : {
@@ -313716,39 +313623,6 @@
         }
       }
     },
-    "TIR (%@-%@)" : {
-      "comment" : "Time in Range with the selected lower threshold and the upper threshold.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "TIR (%@-%@)"
-          }
-        }
-      }
-    },
-    "TIR Lower Threshold" : {
-      "comment" : "Setting for the lower glucose boundary shared by TIR and TITR statistics.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "TIR Lower Threshold"
-          }
-        }
-      }
-    },
-    "TITR (%@-%@)" : {
-      "comment" : "Time in Tight Range with either the Standard or Extended lower threshold.",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "TITR (%@-%@)"
-          }
-        }
-      }
-    },
     "To" : {
       "localizations" : {
         "bg" : {
@@ -335933,17 +335807,6 @@
         }
       }
     },
-    "Uses the established lower threshold of %@." : {
-      "comment" : "Standard lower range threshold description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uses the established lower threshold of %@."
-          }
-        }
-      }
-    },
     "Uses the fairly established Time in Tight Range definition, which is defined as time between %@ and %@  %@." : {
       "comment" : "Time in Tight Range (TITR) verbose hint description",
       "extractionState" : "stale",
@@ -336208,17 +336071,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用OpenAPS的IOB、COB、UAM和ZT預測線。這個選項提供了對算法預測的更詳細視圖，但對一些使用者來說可能更具困惑性。"
-          }
-        }
-      }
-    },
-    "Uses the newer Time in Normoglycemia (TING) lower threshold of %@." : {
-      "comment" : "Extended lower range threshold description",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uses the newer Time in Normoglycemia (TING) lower threshold of %@."
           }
         }
       }
