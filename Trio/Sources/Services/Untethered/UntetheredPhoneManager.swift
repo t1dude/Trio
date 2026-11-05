@@ -1177,7 +1177,8 @@ final class UntetheredPhoneManager: ObservableObject, Injectable {
         let started = Date()
         var attempts = 0
         var bannerShown = false
-        while !state.podEndedOnWatch, !(await odometer.refreshDeliveredUnits()) {
+        while !state.podEndedOnWatch {
+            if await odometer.refreshDeliveredUnits() { break }
             attempts += 1
             debug(.watch, "Untethered: the pump did not answer yet (attempt \(attempts)), retrying")
             // with Bluetooth off nothing reaches the pod, and the watch has let go: said at once, as nobody doses
