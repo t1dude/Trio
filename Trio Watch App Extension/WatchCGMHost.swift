@@ -151,14 +151,8 @@ import WatchKit
     }
 
     private func scheduleAcquisitionBackstop() {
-        WKApplication.shared().scheduleBackgroundRefresh(
-            withPreferredDate: Date(timeIntervalSinceNow: Self.acquisitionBackstopDelay),
-            userInfo: nil
-        ) { error in
-            if let error {
-                WatchLogger.shared.warning(.lifecycle, "Could not schedule the acquisition backstop", error: error)
-            }
-        }
+        // shared with the complications' refresh: watchOS keeps one scheduled refresh
+        WatchBackgroundRefresh.schedule(in: Self.acquisitionBackstopDelay)
     }
 
     private static func direction(_ trend: GlucoseTrend?) -> BloodGlucose.Direction {
