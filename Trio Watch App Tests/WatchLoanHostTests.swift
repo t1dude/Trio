@@ -1179,7 +1179,8 @@ func onMain<T>(_ read: @MainActor() -> T) -> T {
             "readings",
             "cycles",
             "confirmed",
-            "budgetErrors"
+            "budgetErrors",
+            "confirmedLoops"
         ]
         let samples: [Any] = [
             WatchLoanCycleInfo(),
