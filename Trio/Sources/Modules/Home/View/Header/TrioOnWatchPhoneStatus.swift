@@ -34,6 +34,8 @@ struct TrioOnWatchPhoneStatus: Equatable {
     var lastLoop: Date?
     var watchReachable = false
     var podRefusesSessions = false
+    /// The phone's pump is a Medtrum patch: the texts say "patch", not "pod".
+    var pumpIsPatch = false
 
     /// `since` is when the screens first saw the current state.
     static func make(
@@ -205,8 +207,12 @@ struct TrioOnWatchPhoneStatus: Equatable {
         case .podRefused:
             return Banner(
                 symbol: "exclamationmark.triangle.fill",
-                title: String(localized: "Another Device Used Your Pod", comment: "Home banner title"),
-                subtitle: String(localized: "Tap to use the pod on this iPhone.", comment: "Home banner subtitle"),
+                title: pumpIsPatch ? String(localized: "Another Device Used Your Patch", comment: "Home banner title") :
+                    String(localized: "Another Device Used Your Pod", comment: "Home banner title"),
+                subtitle: pumpIsPatch ? String(
+                    localized: "Tap to use the patch on this iPhone.",
+                    comment: "Home banner subtitle"
+                ) : String(localized: "Tap to use the pod on this iPhone.", comment: "Home banner subtitle"),
                 tint: .orange,
                 isCritical: false
             )
@@ -254,7 +260,10 @@ struct TrioOnWatchPhoneStatus: Equatable {
             return Banner(
                 symbol: "iphone",
                 title: String(localized: "Taking Back Your Pump", comment: "Home banner title"),
-                subtitle: String(localized: "Keep your iPhone close to your pod.", comment: "Home banner subtitle"),
+                subtitle: pumpIsPatch ? String(
+                    localized: "Keep your iPhone close to your patch.",
+                    comment: "Home banner subtitle"
+                ) : String(localized: "Keep your iPhone close to your pod.", comment: "Home banner subtitle"),
                 tint: .insulin,
                 isCritical: false
             )
@@ -262,7 +271,10 @@ struct TrioOnWatchPhoneStatus: Equatable {
             return Banner(
                 symbol: "exclamationmark.triangle.fill",
                 title: String(localized: "Can't Reach Your Pump", comment: "Home banner title"),
-                subtitle: String(
+                subtitle: pumpIsPatch ? String(
+                    localized: "Keep your iPhone close to your patch. Nothing is giving insulin automatically.",
+                    comment: "Home banner subtitle"
+                ) : String(
                     localized: "Keep your iPhone close to your pod. Nothing is giving insulin automatically.",
                     comment: "Home banner subtitle"
                 ),
@@ -321,7 +333,7 @@ struct TrioOnWatchPhoneStatus: Equatable {
         return watchReachable ? .watchReachable : .watchUnreachable
     }
 
-    static func takeBackMessage(_ context: TakeBackContext) -> String {
+    static func takeBackMessage(_ context: TakeBackContext, patch: Bool = false) -> String {
         switch context {
         case .watchReachable:
             return String(
@@ -329,10 +341,13 @@ struct TrioOnWatchPhoneStatus: Equatable {
                 comment: "Take Back confirmation while the watch is reachable"
             )
         case .watchUnreachable:
-            return String(
+            return (patch ? String(
+                localized: "Take back your pump from Apple Watch? Do this if your watch is off, lost or out of battery. If your watch is still running, it stops when it next reaches your patch.",
+                comment: "Take Back confirmation while the watch isn't reachable"
+            ) : String(
                 localized: "Take back your pump from Apple Watch? Do this if your watch is off, lost or out of battery. If your watch is still running, it stops when it next reaches your pod.",
                 comment: "Take Back confirmation while the watch isn't reachable"
-            )
+            ))
         case .startUnconfirmed:
             return String(
                 localized: "Your watch didn't confirm the start. Take back your pump on this iPhone?",
@@ -390,7 +405,9 @@ struct TrioOnWatchPhoneStatus: Equatable {
             watchReachable: session?.activationState == .activated && session?.isReachable == true,
             podRefusesSessions: refuses
         )
-        if updated != status { status = updated }
+        var withPump = updated
+        withPump.pumpIsPatch = pump?.pluginIdentifier == "Medtrum"
+        if withPump != status { status = withPump }
     }
 
     func takeBack() async {

@@ -162,6 +162,17 @@ import Testing
         #expect(TrioOnWatchRules.readingTier(lastReadingAt: nil, now: now) == .unknown)
     }
 
+    @Test("With a Medtrum patch the texts say patch, not pod") func patchWording() {
+        var watch = status(.inControl)
+        watch.podFaulted = true
+        #expect(watch.controlLine(now: now, phoneLoopText: nil).text.lowercased().contains("pod"))
+        watch.pumpIsPatch = true
+        let line = watch.controlLine(now: now, phoneLoopText: nil)
+        #expect(line.text.lowercased().contains("patch") && !line.text.lowercased().contains("pod"))
+        #expect(watch.rows(now: now).allSatisfy { row in row.lines.allSatisfy { !$0.lowercased().contains(" pod") } })
+        #expect(TrioOnWatchStatus.stopReason(.foreignSession, patch: true).contains("patch"))
+    }
+
     @Test("Primary action and footer by state") func primaryAndFooter() {
         #expect(status(.phone).primaryAction == .start)
         #expect(status(.starting).primaryAction == nil)

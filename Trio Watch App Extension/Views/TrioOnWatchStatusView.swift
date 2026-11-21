@@ -94,11 +94,11 @@ enum HandOffStage: Equatable {
                 comment: "Watch End refused: the phone didn't answer"
             ))
         }
-        if let alert = status.lastAlert, let text = TrioOnWatchStatus.outcomeText(alert) {
+        if let alert = status.lastAlert, let text = TrioOnWatchStatus.outcomeText(alert, patch: status.pumpIsPatch) {
             return .failed(text)
         }
         if case let .stopped(reason) = status.phase {
-            return .failed(TrioOnWatchStatus.stopReason(reason))
+            return .failed(TrioOnWatchStatus.stopReason(reason, patch: status.pumpIsPatch))
         }
         switch (kind, status.phase) {
         case (.start, .inControl):
@@ -537,7 +537,10 @@ struct TrioOnWatchLoopPage: View {
                 InfoRow(
                     symbol: "target",
                     title: String(localized: "Temp target", comment: "Watch loop page row"),
-                    value: adjustmentText(tempTarget, fallback: String(localized: "Temp target", comment: "Fallback temp target name")),
+                    value: adjustmentText(
+                        tempTarget,
+                        fallback: String(localized: "Temp target", comment: "Fallback temp target name")
+                    ),
                     tint: .green
                 )
             }
