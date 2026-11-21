@@ -986,7 +986,7 @@ func onMain<T>(_ read: @MainActor() -> T) -> T {
         #expect(world.host.uiStatus().tempTarget?.name == "Activity")
         let change = try #require(world.transport.batches.last?.adjustmentChanges?.first { $0.kind == .tempTarget })
         #expect(change.presetID == preset.id)
-        #expect(! await world.host.startAdjustmentConfirmed(.tempTarget, presetID: "unknown"))
+        #expect(await world.host.startAdjustmentConfirmed(.tempTarget, presetID: "unknown") == false)
     }
 
     @Test("An override preset started on the watch shows as running and goes to the phone") func startOverridePreset() async throws {
