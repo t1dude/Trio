@@ -46,6 +46,8 @@ struct TrioOnWatchStatus: Equatable {
     var phoneReachable = true
     /// The borrowed pump is a Medtrum patch: the texts say "patch", not "pod".
     var pumpIsPatch = false
+    /// The watch has adopted the pump from the grant: control has moved, even before the first reading.
+    var pumpAdopted = false
     /// The last cycle that confirmed the pump's state.
     var lastLoopAt: Date?
     var lastCycleAt: Date?
